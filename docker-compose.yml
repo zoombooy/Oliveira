@@ -56,6 +56,7 @@ services:
       OLIVEIRA_MASTER_KEY: ${OLIVEIRA_MASTER_KEY:-change-me-in-development}
       WORKER_ID: ${WORKER_ID:-oliveira-worker}
       TASK_POLL_INTERVAL: ${TASK_POLL_INTERVAL:-1.0}
+      TASK_LEASE_SECONDS: ${TASK_LEASE_SECONDS:-300}
       DATA_DIR: /app/data
     depends_on:
       postgres:

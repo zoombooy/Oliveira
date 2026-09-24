@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.tables import Task
 
 
@@ -52,11 +53,21 @@ async def enqueue_task(
 
 async def claim_task(db: AsyncSession, worker_id: str) -> Task | None:
     now = utc_now_naive()
+    stale_before = now - timedelta(seconds=get_settings().task_lease_seconds)
     stmt = (
         select(Task)
         .where(
-            Task.status.in_(["queued", "retrying"]),
-            Task.available_at <= now,
+            or_(
+                and_(
+                    Task.status.in_(["queued", "retrying"]),
+                    Task.available_at <= now,
+                ),
+                and_(
+                    Task.status == "running",
+                    Task.locked_at.is_not(None),
+                    Task.locked_at <= stale_before,
+                ),
+            )
         )
         .order_by(Task.created_at)
         .with_for_update(skip_locked=True)
@@ -65,6 +76,12 @@ async def claim_task(db: AsyncSession, worker_id: str) -> Task | None:
     task = (await db.execute(stmt)).scalar_one_or_none()
     if task is None:
         return None
+    if task.status == "running":
+        task.status = "retrying"
+        task.last_error = "worker_lease_expired"
+        task.available_at = now
+        task.locked_by = None
+        task.locked_at = None
     task.status = "running"
     task.locked_by = worker_id
     task.locked_at = now

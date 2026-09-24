@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     max_tool_output_chars: int = 12000
     max_context_tokens: int = 12000
     task_poll_interval: float = 1.0
+    task_lease_seconds: int = 300
     worker_id: str = "local-worker"
 
 
