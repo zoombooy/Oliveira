@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: ghcr.io/jonathanmcohen/pgvector:16-0.8.3
+
+  api:
+    build:
+      args:
+        PYTHON_IMAGE: python:3.12-slim
+
+  worker:
+    build:
+      args:
+        PYTHON_IMAGE: python:3.12-slim
+
+  frontend:
+    build:
+      args:
+        NODE_IMAGE: node:22-bookworm
