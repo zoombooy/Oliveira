@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  BarChart3, ClipboardList, FileText, GitBranch, HardDrive, LibraryBig,
+  BarChart3, ChevronDown, ClipboardList, FileText, GitBranch, HardDrive, LibraryBig,
   LockKeyhole, MessageCircle, MessageCirclePlus, PanelLeft, PanelLeftOpen, Plus, Search,
   Send, Settings, UserRound, X,
 } from '@lucide/vue'
@@ -49,6 +49,8 @@ const newMemoryValue = ref('')
 const currentWorkspace = computed(() => workspaces.value.find(item => item.id === workspaceId.value))
 const currentProject = computed(() => projects.value.find(item => item.id === projectId.value))
 const currentConversation = computed(() => conversations.value.find(item => item.id === conversationId.value))
+const currentProvider = computed(() => providers.value.find(item => item.id === currentProject.value?.provider_id) || providers.value.find(item => item.is_default))
+const activeProviderLabel = computed(() => currentProvider.value?.chat_model || '选择模型')
 const runCitations = computed(() => (currentRun.value?.output?.citations as SearchResult[] | undefined) || [])
 const panelTitle = computed(() => ({ chat: '对话', documents: '知识库', search: '检索', facts: '事实审核', timeline: '时间线', runs: '运行记录', memories: '用户记忆', settings: '工作空间设置' }[panel.value]))
 
@@ -94,7 +96,9 @@ async function loadProject() {
     ])
     documents.value = docs; conversations.value = chats; facts.value = factList; reviewItems.value = reviews; runs.value = runList
     conversationId.value = conversations.value[0]?.id || ''
-    if (conversationId.value) messages.value = await api<ChatMessage[]>(`/api/v1/conversations/${conversationId.value}/messages`)
+    messages.value = conversationId.value
+      ? await api<ChatMessage[]>(`/api/v1/conversations/${conversationId.value}/messages`)
+      : []
   } catch (caught) { handleError(caught) } finally { loading.value = false }
 }
 
@@ -113,11 +117,15 @@ function logout() { clearToken(); loggedIn.value = false; user.value = null; wor
 function handleError(caught: unknown) { error.value = caught instanceof Error ? caught.message : '操作失败'; ElMessage.error(error.value) }
 
 async function createConversation() {
-  if (!projectId.value) return
+  if (!projectId.value) {
+    ElMessage.warning('请先选择一个项目')
+    return null
+  }
   try {
     const created = await api<Conversation>(`/api/v1/projects/${projectId.value}/conversations`, { method: 'POST', body: JSON.stringify({ title: '新对话' }) })
     conversations.value.unshift(created); conversationId.value = created.id; messages.value = []; panel.value = 'chat'
-  } catch (caught) { handleError(caught) }
+    return created
+  } catch (caught) { handleError(caught); return null }
 }
 
 async function selectConversation(id: string) {
@@ -127,9 +135,14 @@ async function selectConversation(id: string) {
 }
 
 async function sendMessage() {
-  if (!conversationId.value || !composer.value.trim() || sending.value) return
+  if (!composer.value.trim() || sending.value) return
+  if (!projectId.value) {
+    ElMessage.warning('请先在输入框上方选择项目')
+    return
+  }
   const content = composer.value.trim(); composer.value = ''; sending.value = true
   try {
+    if (!conversationId.value && !await createConversation()) return
     const accepted = await api<{ run_id: string; user_message_id: string; status: string }>(`/api/v1/conversations/${conversationId.value}/messages`, { method: 'POST', body: JSON.stringify({ content }) })
     messages.value.push({ id: accepted.user_message_id, role: 'user', content, created_at: new Date().toISOString() })
     currentRun.value = await pollRun(accepted.run_id)
@@ -294,8 +307,59 @@ onMounted(boot)
       </header>
       <div v-if="error" class="error-banner">{{ error }}<button @click="error = ''">×</button></div>
       <section v-if="panel === 'chat'" class="content chat-content">
-        <div v-if="!currentConversation" class="welcome-card"><div class="chat-empty-kicker"><MessageCircle :size="18" /> 知识库问答</div><h1>答案藏在知识里，我来找。</h1><p>上传资料后，可以从来源、版本和时间中找到可核查的答案。</p><button class="primary-button small" @click="panel = 'documents'">打开知识库 <span>↗</span></button></div>
-        <template v-else><div class="message-stream"><div v-if="!messages.length" class="empty-state"><MessageCircle :size="30" /><h3>这是一段新的对话</h3><p>向你的知识库提问，答案会带回可展开的证据。</p></div><article v-for="message in messages" :key="message.id" class="message-row" :class="message.role"><div class="avatar">{{ message.role === 'user' ? (user?.display_name || 'U').slice(0, 1) : 'O' }}</div><div class="message-body"><div class="message-meta">{{ message.role === 'user' ? '你' : 'Oliveira' }}<span>{{ new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span></div><div class="message-text">{{ message.content }}</div><div v-if="message.role === 'assistant' && runCitations.length" class="citation-strip"><button v-for="(citation, index) in runCitations.slice(0, 3)" :key="index" @click="selectedCitation = citation">来源 {{ index + 1 }} · {{ citation.document_title }}</button></div></div></article><div v-if="sending" class="thinking"><span /><span /><span />正在检索并核对来源…</div></div><form class="composer" @submit.prevent="sendMessage"><textarea v-model="composer" :disabled="sending" placeholder="问问你的知识库…" rows="1" @keydown.enter.exact.prevent="sendMessage" /><button type="submit" class="send-button" :disabled="sending || !composer.trim()" aria-label="发送"><Send :size="17" /></button></form></template>
+        <div v-if="!currentConversation" class="chat-start-screen">
+          <div class="chat-greeting">
+            <p class="eyebrow">TRACEABLE KNOWLEDGE WORKBENCH</p>
+            <h1>语析，析万物之语</h1>
+            <p>从你的资料中寻找答案，保留每一个来源、版本和时间。</p>
+          </div>
+          <div class="chat-start-composer">
+            <div class="chat-project-context">
+              <LibraryBig :size="16" />
+              <select v-model="projectId" aria-label="选择项目" :disabled="!projects.length">
+                <option value="" disabled>{{ projects.length ? '选择项目' : '请先创建项目' }}</option>
+                <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
+              </select>
+              <ChevronDown :size="15" />
+            </div>
+            <form class="composer yuxi-composer" @submit.prevent="sendMessage">
+              <textarea v-model="composer" :disabled="sending" placeholder="问点什么？使用 @ 可以选择文件、知识库或技能进行引用。" rows="2" @keydown.enter.exact.prevent="sendMessage" />
+              <div class="composer-actions">
+                <div class="composer-actions-left">
+                  <button type="button" class="composer-icon-button" aria-label="打开知识库" title="打开知识库" @click="panel = 'documents'"><Plus :size="18" /></button>
+                  <button type="button" class="composer-tool-button" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
+                  <span class="composer-mode">证据优先</span>
+                </div>
+                <div class="composer-actions-right">
+                  <span class="composer-model" :title="activeProviderLabel">{{ activeProviderLabel }}</span>
+                  <button type="submit" class="send-button" :disabled="sending || !composer.trim() || !projectId" aria-label="发送"><Send :size="16" /></button>
+                </div>
+              </div>
+            </form>
+            <p class="chat-disclaimer">回答会记录来源与版本，请对关键结论进行核对。</p>
+          </div>
+        </div>
+        <template v-else>
+          <div class="message-stream">
+            <div v-if="!messages.length" class="empty-state"><MessageCircle :size="30" /><h3>这是一段新的对话</h3><p>向你的知识库提问，答案会带回可展开的证据。</p></div>
+            <article v-for="message in messages" :key="message.id" class="message-row" :class="message.role"><div class="avatar">{{ message.role === 'user' ? (user?.display_name || 'U').slice(0, 1) : 'O' }}</div><div class="message-body"><div class="message-meta">{{ message.role === 'user' ? '你' : 'Oliveira' }}<span>{{ new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span></div><div class="message-text">{{ message.content }}</div><div v-if="message.role === 'assistant' && runCitations.length" class="citation-strip"><button v-for="(citation, index) in runCitations.slice(0, 3)" :key="index" @click="selectedCitation = citation">来源 {{ index + 1 }} · {{ citation.document_title }}</button></div></div></article>
+            <div v-if="sending" class="thinking"><span /><span /><span />正在检索并核对来源…</div>
+          </div>
+          <form class="composer yuxi-composer chat-composer" @submit.prevent="sendMessage">
+            <textarea v-model="composer" :disabled="sending" placeholder="问点什么？使用 @ 可以选择文件、知识库或技能进行引用。" rows="2" @keydown.enter.exact.prevent="sendMessage" />
+            <div class="composer-actions">
+              <div class="composer-actions-left">
+                <button type="button" class="composer-icon-button" aria-label="打开知识库" title="打开知识库" @click="panel = 'documents'"><Plus :size="18" /></button>
+                <button type="button" class="composer-tool-button" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
+                <span class="composer-mode">证据优先</span>
+              </div>
+              <div class="composer-actions-right">
+                <span class="composer-model" :title="activeProviderLabel">{{ activeProviderLabel }}</span>
+                <button type="submit" class="send-button" :disabled="sending || !composer.trim()" aria-label="发送"><Send :size="16" /></button>
+              </div>
+            </div>
+          </form>
+        </template>
       </section>
       <section v-else-if="panel === 'documents'" class="content"><div class="section-heading"><div><p class="eyebrow">资料管理</p><h1>知识库</h1><p>原始文档、版本和索引状态都保留在这里。</p></div><button class="primary-button small" @click="uploadInput?.click()"><Plus :size="16" /> 上传文档</button><input ref="uploadInput" hidden type="file" accept=".pdf,.docx,.md,.markdown,.txt" @change="uploadDocument" /></div><div class="metric-row"><div><span>文档</span><strong>{{ documents.length }}</strong></div><div><span>已索引</span><strong>{{ documents.filter(item => item.index_status === 'completed').length }}</strong></div><div><span>待处理</span><strong>{{ documents.filter(item => item.index_status !== 'completed').length }}</strong></div></div><div class="data-card"><div v-for="document in documents" :key="document.id" class="document-row"><div class="file-icon"><FileText :size="19" /></div><div class="row-main"><strong>{{ document.title }}</strong><span>版本 {{ document.version_no }} · {{ document.chunk_count }} 个知识块</span></div><span class="status-pill" :class="document.index_status">{{ document.index_status === 'completed' ? '已索引' : document.index_status === 'unavailable' ? '待 Embedding' : document.index_status }}</span><span class="row-date">{{ new Date(document.created_at).toLocaleDateString() }}</span></div><div v-if="!documents.length" class="empty-state compact"><FileText :size="25" /><p>上传第一份资料，开始建立可追溯知识库。</p></div></div></section>
       <section v-else-if="panel === 'search'" class="content"><div class="section-heading"><div><p class="eyebrow">全文与语义</p><h1>检索</h1><p>向量与关键词结果合并，并保留各自的评分。</p></div></div><form class="search-bar" @submit.prevent="search"><Search :size="18" /><input v-model="searchQuery" placeholder="搜索文档内容、项目名称或术语…" /><button type="submit">检索</button></form><div class="result-list"><button v-for="result in searchResults" :key="result.chunk_id" class="result-card" @click="selectedCitation = result"><div class="result-top"><span>{{ result.document_title }}</span><small>{{ result.methods.join(' + ') }} · {{ result.final_score.toFixed(2) }}</small></div><p>{{ result.snippet }}</p><div class="result-location">版本 {{ result.document_version_id.slice(0, 8) }} · {{ result.page_number ? `第 ${result.page_number} 页` : '段落定位' }}</div></button><div v-if="!searchResults.length" class="empty-state"><Search :size="30" /><h3>输入一个问题或关键词</h3><p>结果会显示来源、定位和混合分数。</p></div></div></section>
