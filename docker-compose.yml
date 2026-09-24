@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: oliveira
       POSTGRES_DB: oliveira
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -38,7 +38,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
       - ./backend/data:/app/data
 
@@ -70,7 +70,7 @@ services:
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
 
 volumes:
   pgdata:
