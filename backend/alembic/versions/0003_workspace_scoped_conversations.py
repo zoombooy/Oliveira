@@ -9,7 +9,7 @@ not search project documents unless a project scope is selected.
 from alembic import op
 
 
-revision = "0003_workspace_scoped_conversations"
+revision = "0003_workspace_scope"
 down_revision = "0002_v03_eval_task_dedupe"
 branch_labels = None
 depends_on = None
