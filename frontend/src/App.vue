@@ -188,6 +188,25 @@ onMounted(boot)
           <path d="M-80 235 C240 390 420 130 730 240 S1150 460 1670 240" />
           <path d="M-80 560 C260 420 480 650 720 510 S1160 380 1670 570" />
         </g>
+        <g class="network-mesh">
+          <path d="M-20 170 C330 -20 1270 -20 1620 170" /><path d="M-20 245 C350 78 1250 78 1620 245" />
+          <path d="M-20 320 C370 190 1230 190 1620 320" /><path d="M-20 400 C395 315 1205 315 1620 400" />
+          <path d="M-20 480 C395 420 1205 420 1620 480" /><path d="M-20 560 C370 525 1230 525 1620 560" />
+          <path d="M-20 640 C350 650 1250 650 1620 640" /><path d="M-20 720 C330 780 1270 780 1620 720" />
+          <path d="M120 -20 C500 210 500 690 120 920" /><path d="M270 -20 C585 205 585 695 270 920" />
+          <path d="M430 -20 C660 205 660 695 430 920" /><path d="M610 -20 C750 205 750 695 610 920" />
+          <path d="M790 -20 C800 205 800 695 790 920" /><path d="M970 -20 C850 205 850 695 970 920" />
+          <path d="M1150 -20 C945 205 945 695 1150 920" /><path d="M1330 -20 C1015 205 1015 695 1330 920" />
+          <path d="M1480 -20 C1100 210 1100 690 1480 920" />
+        </g>
+        <g class="network-flows">
+          <path class="flow flow-one" d="M-40 285 C270 120 520 265 810 202 S1300 105 1640 280" />
+          <path class="flow flow-two" d="M-50 485 C280 360 510 520 790 444 S1270 330 1650 495" />
+          <path class="flow flow-three" d="M-30 675 C300 555 540 720 820 638 S1260 550 1630 690" />
+          <path class="flow flow-four" d="M160 930 C390 680 590 745 790 910 S1160 990 1440 690" />
+          <path class="flow flow-five" d="M130 -30 C400 240 360 610 160 930" />
+          <path class="flow flow-six" d="M1470 -30 C1210 240 1240 620 1460 930" />
+        </g>
         <g class="network-nodes">
           <circle cx="142" cy="141" r="3" /><circle cx="270" cy="520" r="3" /><circle cx="370" cy="206" r="3" />
           <circle cx="520" cy="238" r="3" /><circle cx="590" cy="118" r="3" /><circle cx="650" cy="480" r="3" />
@@ -195,6 +214,10 @@ onMounted(boot)
           <circle cx="1010" cy="165" r="3" /><circle cx="1120" cy="320" r="3" /><circle cx="1190" cy="700" r="3" />
           <circle cx="1350" cy="510" r="3" /><circle cx="1410" cy="730" r="3" /><circle cx="1510" cy="310" r="3" />
           <circle cx="235" cy="390" r="3" /><circle cx="480" cy="650" r="3" /><circle cx="730" cy="240" r="3" />
+          <circle cx="180" cy="275" r="2.5" /><circle cx="325" cy="330" r="2.5" /><circle cx="440" cy="430" r="2.5" />
+          <circle cx="560" cy="590" r="2.5" /><circle cx="680" cy="720" r="2.5" /><circle cx="820" cy="640" r="2.5" />
+          <circle cx="940" cy="710" r="2.5" /><circle cx="1080" cy="590" r="2.5" /><circle cx="1220" cy="430" r="2.5" />
+          <circle cx="1350" cy="330" r="2.5" /><circle cx="1480" cy="270" r="2.5" />
         </g>
       </svg>
     </div>
