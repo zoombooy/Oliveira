@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_workspace_member
 from app.core.database import get_session
 from app.core.security import decrypt_secret, encrypt_secret
-from app.models.tables import ProviderProfile, User, Workspace, WorkspaceMember
+from app.models.tables import Project, ProviderProfile, User, Workspace, WorkspaceMember
 from app.schemas.workspaces import (
     ProviderCreate,
     ProviderOut,
@@ -166,7 +166,14 @@ async def patch_provider(
     if item is None:
         raise HTTPException(status_code=404, detail="Provider 不存在")
     await require_workspace_member(item.workspace_id, user, db, roles={"owner", "admin"})
-    for name in ("name", "base_url", "chat_model", "embedding_model", "is_default"):
+    for name in (
+        "name",
+        "provider_type",
+        "base_url",
+        "chat_model",
+        "embedding_model",
+        "is_default",
+    ):
         value = getattr(body, name)
         if value is not None:
             setattr(item, name, value.rstrip("/") if name == "base_url" else value)
@@ -196,6 +203,15 @@ async def delete_provider(
     if item is None:
         raise HTTPException(status_code=404, detail="Provider 不存在")
     await require_workspace_member(item.workspace_id, user, db, roles={"owner", "admin"})
+    in_use = (
+        await db.execute(
+            select(Project.id)
+            .where(Project.provider_id == item.id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if in_use is not None:
+        raise HTTPException(status_code=409, detail="该供应商仍被项目使用，请先切换项目供应商")
     await db.delete(item)
     await db.commit()
 

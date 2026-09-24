@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   BarChart3, ClipboardList, FileText, GitBranch, HardDrive, LibraryBig,
   LockKeyhole, MessageCircle, MessageCirclePlus, PanelLeft, PanelLeftOpen, Plus, Search,
   Send, Settings, UserRound, X,
 } from '@lucide/vue'
 import { api, clearToken, isLoggedIn, login, register, type Conversation, type Document, type Fact, type Memory, type Message as ChatMessage, type Project, type Provider, type ReviewItem, type Run, type User, type Workspace, type SearchResult } from './api'
+import ModelProvidersPanel from './components/ModelProvidersPanel.vue'
 
 type Panel = 'chat' | 'documents' | 'search' | 'facts' | 'timeline' | 'runs' | 'memories' | 'settings'
 
@@ -45,12 +46,6 @@ const uploadInput = ref<HTMLInputElement | null>(null)
 const newProjectName = ref('')
 const newMemoryKey = ref('')
 const newMemoryValue = ref('')
-const providerName = ref('')
-const providerBaseUrl = ref('http://host.docker.internal:11434/v1')
-const providerChatModel = ref('')
-const providerEmbeddingModel = ref('')
-const providerApiKey = ref('')
-
 const currentWorkspace = computed(() => workspaces.value.find(item => item.id === workspaceId.value))
 const currentProject = computed(() => projects.value.find(item => item.id === projectId.value))
 const currentConversation = computed(() => conversations.value.find(item => item.id === conversationId.value))
@@ -72,6 +67,17 @@ async function loadWorkspace() {
   projects.value = await api<Project[]>(`/api/v1/projects?workspace_id=${workspaceId.value}`)
   providers.value = await api<Provider[]>(`/api/v1/workspaces/${workspaceId.value}/providers`)
   projectId.value = projects.value[0]?.id || ''
+  await loadProject()
+}
+
+async function refreshWorkspace() {
+  if (!workspaceId.value) return
+  const previousProjectId = projectId.value
+  projects.value = await api<Project[]>(`/api/v1/projects?workspace_id=${workspaceId.value}`)
+  providers.value = await api<Provider[]>(`/api/v1/workspaces/${workspaceId.value}/providers`)
+  projectId.value = projects.value.some(item => item.id === previousProjectId)
+    ? previousProjectId
+    : projects.value[0]?.id || ''
   await loadProject()
 }
 
@@ -164,9 +170,6 @@ async function review(item: ReviewItem, action: 'approve' | 'reject') { try { aw
 async function loadMemories() { memories.value = await api<Memory[]>('/api/v1/users/me/memories') }
 async function createMemory() { if (!newMemoryKey.value.trim() || !newMemoryValue.value.trim()) return; try { await api('/api/v1/users/me/memories', { method: 'POST', body: JSON.stringify({ key: newMemoryKey.value, value: newMemoryValue.value }) }); newMemoryKey.value = ''; newMemoryValue.value = ''; await loadMemories() } catch (caught) { handleError(caught) } }
 async function retractMemory(memory: Memory) { try { await api(`/api/v1/users/me/memories/${memory.id}`, { method: 'DELETE' }); await loadMemories() } catch (caught) { handleError(caught) } }
-async function createProvider() { if (!workspaceId.value || !providerName.value.trim() || !providerBaseUrl.value.trim() || !providerChatModel.value.trim()) return; try { await api<Provider>(`/api/v1/workspaces/${workspaceId.value}/providers`, { method: 'POST', body: JSON.stringify({ name: providerName.value, base_url: providerBaseUrl.value, chat_model: providerChatModel.value, embedding_model: providerEmbeddingModel.value, api_key: providerApiKey.value }) }); providerName.value = ''; providerChatModel.value = ''; providerEmbeddingModel.value = ''; providerApiKey.value = ''; providers.value = await api<Provider[]>(`/api/v1/workspaces/${workspaceId.value}/providers`); ElMessage.success('Provider 已保存') } catch (caught) { handleError(caught) } }
-async function deleteProjectDraft() { if (newProjectName.value) { await ElMessageBox.confirm('仅清空当前输入？', '提示').catch(() => undefined); newProjectName.value = '' } }
-
 watch(workspaceId, () => { if (loggedIn.value) loadWorkspace() })
 watch(projectId, () => { if (loggedIn.value) loadProject() })
 watch(panel, (value) => { if (value === 'memories' && loggedIn.value) loadMemories() })
@@ -300,7 +303,7 @@ onMounted(boot)
       <section v-else-if="panel === 'timeline'" class="content"><div class="section-heading"><div><p class="eyebrow">双时态记录</p><h1>时间线</h1><p>同时查看事实的业务有效时间与系统记录时间。</p></div></div><div class="timeline"> <div v-for="fact in facts" :key="fact.id" class="timeline-item"><span class="timeline-dot" /><div><div class="timeline-date">{{ fact.valid_from ? new Date(fact.valid_from).toLocaleDateString() : '未声明业务时间' }} <span>记录于 {{ fact.recorded_at ? new Date(fact.recorded_at).toLocaleDateString() : '—' }}</span></div><h3>{{ fact.subject_text }} <em>{{ fact.predicate }}</em> {{ fact.object_text }}</h3><span class="status-pill" :class="fact.status">{{ fact.status }}</span></div></div><div v-if="!facts.length" class="empty-state"><GitBranch :size="30" /><h3>还没有可回放的事实</h3><p>完成一次事实抽取并审核后，时间线会在这里出现。</p></div></div></section>
       <section v-else-if="panel === 'runs'" class="content"><div class="section-heading"><div><p class="eyebrow">任务状态</p><h1>运行记录</h1><p>每一次 Agent、索引和抽取任务都可以回放。</p></div></div><div class="data-card"><div v-for="run in runs" :key="run.id" class="document-row"><div class="run-status" :class="run.status" /><div class="row-main"><strong>{{ run.kind === 'chat' ? '知识对话' : run.kind }}</strong><span>{{ run.id.slice(0, 14) }} · {{ new Date(run.created_at).toLocaleString() }}</span></div><span class="status-pill" :class="run.status">{{ run.status }}</span><span v-if="run.error" class="row-error">{{ run.error }}</span></div><div v-if="!runs.length" class="empty-state compact"><BarChart3 :size="25" /><p>完成一次对话后，这里会显示 Run 事件。</p></div></div></section>
       <section v-else-if="panel === 'memories'" class="content"><div class="section-heading"><div><p class="eyebrow">长期记忆</p><h1>我的记忆</h1><p>只有你明确保存的内容才会进入长期记忆；删除采用撤回而不是抹除历史。</p></div></div><div class="memory-create"><input v-model="newMemoryKey" placeholder="键，例如：回答偏好" /><input v-model="newMemoryValue" placeholder="值，例如：请使用中文和简洁小节" /><button class="primary-button small" @click="createMemory">保存记忆</button></div><div class="data-card"><div v-for="memory in memories" :key="memory.id" class="document-row"><div class="file-icon"><UserRound :size="18" /></div><div class="row-main"><strong>{{ memory.key }}</strong><span>{{ memory.value }}</span></div><span class="status-pill" :class="memory.status">{{ memory.status === 'active' ? '使用中' : '已撤回' }}</span><button v-if="memory.status === 'active'" class="text-button" @click="retractMemory(memory)">撤回</button></div><div v-if="!memories.length" class="empty-state compact"><UserRound :size="25" /><p>你还没有保存任何长期记忆。</p></div></div></section>
-      <section v-else class="content"><div class="section-heading"><div><p class="eyebrow">工作空间</p><h1>设置</h1><p>管理项目和模型 Provider。密钥只在服务端加密保存，前端不会读取明文。</p></div></div><div class="settings-grid"><div class="settings-card"><h3>新建项目</h3><p>将不同主题的文档、事实和对话隔离在独立项目中。</p><div class="inline-form"><input v-model="newProjectName" placeholder="项目名称" @keydown.enter="createProject" /><button class="primary-button small" @click="createProject">创建</button></div></div><div class="settings-card"><h3>Provider</h3><p>{{ providers.length ? `当前工作空间有 ${providers.length} 个 Provider 配置。` : '还没有配置 Provider。' }}</p><div v-for="provider in providers" :key="provider.id" class="provider-line"><span class="provider-dot" />{{ provider.name }}<small>{{ provider.chat_model }} · {{ provider.has_api_key ? '密钥已保护' : '本地模型' }}</small></div><div class="provider-form"><input v-model="providerName" placeholder="配置名称" /><input v-model="providerBaseUrl" placeholder="OpenAI-compatible Base URL" /><input v-model="providerChatModel" placeholder="聊天模型，例如 qwen2.5" /><input v-model="providerEmbeddingModel" placeholder="Embedding 模型（可选）" /><input v-model="providerApiKey" type="password" placeholder="API Key（本地模型可留空）" /><button class="primary-button small" @click="createProvider">保存 Provider</button></div><div class="provider-hint"><LockKeyhole :size="15" />支持 OpenAI-compatible、Ollama 与 vLLM</div></div></div></section>
+      <section v-else class="content settings-content"><ModelProvidersPanel :workspace-id="workspaceId" :providers="providers" :projects="projects" :project-id="projectId" @refresh="refreshWorkspace" @project-changed="refreshWorkspace" /></section>
     </main>
     <aside v-if="selectedCitation" class="citation-drawer"><div class="drawer-header"><div><p class="eyebrow">证据详情</p><h3>{{ selectedCitation.document_title }}</h3></div><button class="icon-button" aria-label="关闭证据详情" @click="selectedCitation = null"><X :size="16" /></button></div><div class="drawer-meta">{{ selectedCitation.document_version_id }}<span>{{ selectedCitation.page_number ? `第 ${selectedCitation.page_number} 页` : '段落定位' }}</span></div><blockquote>{{ selectedCitation.snippet }}</blockquote><div class="score-grid"><div><span>最终分数</span><strong>{{ selectedCitation.final_score.toFixed(3) }}</strong></div><div><span>检索方式</span><strong>{{ selectedCitation.methods.join(' + ') }}</strong></div></div></aside>
   </div>

@@ -54,6 +54,9 @@ class ProviderOut(BaseModel):
 
 class ProviderPatch(BaseModel):
     name: str | None = Field(default=None, max_length=120)
+    provider_type: str | None = Field(
+        default=None, pattern="^(openai_compatible|ollama|vllm)$"
+    )
     base_url: str | None = Field(default=None, max_length=500)
     chat_model: str | None = Field(default=None, max_length=200)
     embedding_model: str | None = Field(default=None, max_length=200)

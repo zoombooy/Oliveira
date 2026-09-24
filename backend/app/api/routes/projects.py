@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_workspace_member
 from app.core.database import get_session
 from app.models.tables import Project, ProviderProfile, User, Workspace, WorkspaceMember
-from app.schemas.runs import ProjectCreate, ProjectOut
+from app.schemas.runs import ProjectCreate, ProjectOut, ProjectPatch
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -65,3 +65,25 @@ async def list_projects(
             .where(WorkspaceMember.user_id == user.id)
         )
     return list((await db.execute(stmt.order_by(Project.created_at))).scalars())
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+async def patch_project(
+    project_id: UUID,
+    body: ProjectPatch,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Project:
+    project = await db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    await require_workspace_member(project.workspace_id, user, db, roles={"owner", "admin", "member"})
+    if "provider_id" in body.model_fields_set:
+        if body.provider_id is not None:
+            provider = await db.get(ProviderProfile, body.provider_id)
+            if provider is None or provider.workspace_id != project.workspace_id:
+                raise HTTPException(status_code=400, detail="Provider 不属于该工作空间")
+        project.provider_id = body.provider_id
+    await db.commit()
+    await db.refresh(project)
+    return project

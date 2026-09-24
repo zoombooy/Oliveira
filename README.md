@@ -158,6 +158,8 @@ Agent 通过 PostgreSQL 任务队列异步执行，运行过程写入 Run 和 Ru
 - [x] 本地对象存储 adapter，领域层只保存相对 `object_key`；
 - [x] `search_chunks`、`query_facts`、`get_entity_timeline` 只读 Agent Tool Registry；
 - [x] 工具参数 schema 校验、工具名称校验和工具耗时 RunEvent；
+- [x] Yuxi 风格的模型供应商维护页：供应商卡片、搜索、默认供应商、连接测试和项目级绑定；
+- [x] Ollama、vLLM、本地 OpenAI-compatible 网关快速接入模板，支持容器通过 `host.docker.internal` 访问宿主机模型；
 - [ ] 30 条以上真实 QA 数据集和评估基线；
 - [ ] 评估数据集和 Run 的 Web 管理页面；
 - [ ] 前端文档处理进度轮询与失败阶段展示；
@@ -523,11 +525,21 @@ v0.3 不扩张到 Skills、MCP 市场或外部系统写入，而是优先把当�
 
 #### 7. Provider 和安全体验
 
-- Web 增加 Provider 连接测试；
+- Web 增加 Provider 连接测试；（已完成基础版本）
 - 对聊天模型和 Embedding 模型能力分别检查；
 - API Key 只显示掩码；
 - 日志、异常堆栈和 RunEvent 不得泄露明文密钥；
 - 为跨 workspace 访问、资源越权、无权限审核和无权限 Provider 操作增加集成测试。
+
+本版本的模型接入入口位于“设置 → 模型供应商”。常见配置如下：
+
+| 场景 | Provider 类型 | Base URL 示例 | API Key |
+| --- | --- | --- | --- |
+| Docker 中的 Oliveira 连接宿主机 Ollama | `ollama` | `http://host.docker.internal:11434/v1` | 可留空 |
+| Docker 中的 Oliveira 连接宿主机 vLLM | `vllm` | `http://host.docker.internal:8000/v1` | 按服务配置 |
+| 自建 OpenAI-compatible 网关 | `openai_compatible` | `http://host.docker.internal:<port>/v1` 或内网地址 | 按服务配置 |
+
+聊天模型名称必须与对应服务实际暴露的模型 ID 一致。Embedding 模型是可选项；没有 Embedding 服务时，Oliveira 仍保留关键词检索能力，并在后端按可用索引状态降级。
 
 ### P2：可以完成
 

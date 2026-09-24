@@ -43,3 +43,7 @@ class ProjectOut(BaseModel):
     owner_id: UUID
     provider_id: UUID | None
     created_at: datetime
+
+
+class ProjectPatch(BaseModel):
+    provider_id: UUID | None = None

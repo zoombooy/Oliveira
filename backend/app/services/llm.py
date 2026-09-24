@@ -74,9 +74,23 @@ async def get_llm_for_project(db: AsyncSession, project_id) -> LLMClient:
     """Resolve the project provider without exposing provider secrets to callers."""
     settings = get_settings()
     project = await db.get(Project, project_id)
-    if project is None or project.provider_id is None:
+    if project is None:
         return get_llm()
-    provider = await db.get(ProviderProfile, project.provider_id)
+    provider = await db.get(ProviderProfile, project.provider_id) if project.provider_id else None
+    if provider is not None and provider.workspace_id != project.workspace_id:
+        provider = None
+    if provider is None:
+        provider = (
+            await db.execute(
+                select(ProviderProfile)
+                .where(
+                    ProviderProfile.workspace_id == project.workspace_id,
+                    ProviderProfile.is_default.is_(True),
+                )
+                .order_by(ProviderProfile.created_at)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
     if provider is None:
         return get_llm()
     api_key = decrypt_secret(provider.api_key_ciphertext) if provider.api_key_ciphertext else ""

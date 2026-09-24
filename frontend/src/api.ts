@@ -9,7 +9,7 @@ export type SearchResult = { chunk_id: string; document_id: string; document_ver
 export type Fact = { id: string; project_id: string; subject_text: string; predicate: string; object_text: string; status: string; confidence?: number | null; valid_from?: string | null; valid_to?: string | null; recorded_at?: string | null; evidence_ref_id?: string | null; created_at: string }
 export type ReviewItem = { id: string; project_id: string; item_type: string; ref_id: string; reason: string; status: string; created_at: string; resolution: string }
 export type Memory = { id: string; user_id: string; key: string; value: string; status: string; confidence: number; created_at: string; updated_at: string; retracted_at?: string | null }
-export type Provider = { id: string; workspace_id: string; name: string; provider_type: string; base_url: string; chat_model: string; embedding_model: string; has_api_key: boolean; is_default: boolean }
+export type Provider = { id: string; workspace_id: string; name: string; provider_type: 'openai_compatible' | 'ollama' | 'vllm' | string; base_url: string; chat_model: string; embedding_model: string; has_api_key: boolean; capabilities: Record<string, unknown>; is_default: boolean; created_at?: string; updated_at?: string }
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
