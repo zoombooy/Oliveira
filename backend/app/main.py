@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import conversations, documents, health, projects, runs
+from app.api.routes import auth, conversations, documents, facts, health, memories, projects, runs, search, tasks, workspaces
 from app.core.config import get_settings
 from app.core.database import engine
 
@@ -22,5 +22,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (health, projects, documents, conversations, runs):
+for module in (health, auth, workspaces, projects, documents, search, facts, conversations, memories, tasks, runs):
     app.include_router(module.router)

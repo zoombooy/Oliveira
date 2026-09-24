@@ -42,3 +42,9 @@ class AskOut(BaseModel):
     message: MessageOut
     citations: list[CitationOut]
     run_id: UUID
+
+
+class AskAcceptedOut(BaseModel):
+    run_id: UUID
+    user_message_id: UUID
+    status: str

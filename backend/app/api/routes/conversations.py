@@ -1,30 +1,24 @@
-import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.api.deps import get_current_user, require_project_access
 from app.core.database import get_session
-from app.models.tables import Conversation, Message, Run
+from app.core.config import get_settings
+from app.models.tables import Conversation, Message, Run, User
 from app.schemas.conversations import (
     AskIn,
-    AskOut,
-    CitationOut,
+    AskAcceptedOut,
     ConversationCreate,
     ConversationOut,
     MessageOut,
 )
-from app.services.llm import LLMNotConfigured, get_llm
-from app.services.retrieval import search
+from app.services.run_events import append_run_event
+from app.services.tasks import enqueue_task
 
 router = APIRouter(prefix="/api/v1", tags=["conversations"])
-
-_ANSWER_SYSTEM_PROMPT = (
-    "你是 Oliveira 知识助手。只依据提供的资料回答问题，"
-    "并在引用资料时标注来源编号，如 [1]。资料不足以回答时明确说明，不要编造。"
-)
-
 
 async def _load_conversation(db: AsyncSession, conversation_id) -> Conversation:
     conversation = await db.get(Conversation, conversation_id)
@@ -35,16 +29,16 @@ async def _load_conversation(db: AsyncSession, conversation_id) -> Conversation:
 
 @router.post("/projects/{project_id}/conversations", response_model=ConversationOut)
 async def create_conversation(
-    project_id,
+    project_id: UUID,
     body: ConversationCreate | None = None,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Conversation:
-    from app.models.tables import Project
-
-    if await db.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="项目不存在")
+    await require_project_access(project_id, user, db)
     conversation = Conversation(
-        project_id=project_id, title=(body.title if body else None) or "新对话"
+        project_id=project_id,
+        user_id=user.id,
+        title=(body.title if body else None) or "新对话",
     )
     db.add(conversation)
     await db.commit()
@@ -52,11 +46,32 @@ async def create_conversation(
     return conversation
 
 
+@router.get("/projects/{project_id}/conversations", response_model=list[ConversationOut])
+async def list_conversations(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[Conversation]:
+    await require_project_access(project_id, user, db)
+    return list(
+        (
+            await db.execute(
+                select(Conversation)
+                .where(Conversation.project_id == project_id)
+                .order_by(Conversation.updated_at.desc())
+            )
+        ).scalars()
+    )
+
+
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])
 async def list_messages(
-    conversation_id, db: AsyncSession = Depends(get_session)
+    conversation_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
 ) -> list[MessageOut]:
-    await _load_conversation(db, conversation_id)
+    conversation = await _load_conversation(db, conversation_id)
+    await require_project_access(conversation.project_id, user, db)
     stmt = (
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -65,109 +80,48 @@ async def list_messages(
     return list((await db.execute(stmt)).scalars())
 
 
-@router.post("/conversations/{conversation_id}/messages", response_model=AskOut)
+@router.post("/conversations/{conversation_id}/messages", response_model=AskAcceptedOut, status_code=status.HTTP_202_ACCEPTED)
 async def ask(
-    conversation_id,
+    conversation_id: UUID,
     body: AskIn,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> AskOut:
+) -> AskAcceptedOut:
     conversation = await _load_conversation(db, conversation_id)
-    settings = get_settings()
-    llm = get_llm()
-
+    project = await require_project_access(conversation.project_id, user, db)
     run = Run(
         project_id=conversation.project_id,
         conversation_id=conversation.id,
         kind="chat",
-        status="running",
+        status="queued",
         input={"question": body.content},
-        started_at=datetime.datetime.now(datetime.UTC),
     )
     user_message = Message(conversation_id=conversation.id, role="user", content=body.content)
     db.add_all([run, user_message])
     await db.flush()
-
-    query_embedding = await llm.embed([body.content])
-    query_embedding = query_embedding[0] if query_embedding else None
-    retrieved = await search(
+    await append_run_event(db, run.id, "queued", {"question_length": len(body.content)})
+    await enqueue_task(
         db,
-        conversation.project_id,
-        body.content,
-        top_k=settings.retrieval_top_k,
-        query_embedding=query_embedding,
+        workspace_id=project.workspace_id,
+        project_id=conversation.project_id,
+        kind="agent_run",
+        payload={"run_id": str(run.id), "conversation_id": str(conversation.id)},
     )
-
-    context_block = "\n\n".join(
-        f"[{i}] 来源: {r.document_title}"
-        + (f" 第{r.page_number}页" if r.page_number else "")
-        + f"\n{r.snippet}"
-        for i, r in enumerate(retrieved, start=1)
-    )
-    prompt = (
-        f"资料：\n{context_block}\n\n问题：{body.content}"
-        if context_block
-        else f"问题：{body.content}\n\n（资料库中没有检索到相关内容）"
-    )
-
-    try:
-        answer = await llm.chat(
-            [
-                {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
+    total_chars = (
+        await db.execute(
+            select(func.coalesce(func.sum(func.length(Message.content)), 0)).where(
+                Message.conversation_id == conversation.id
+            )
         )
-    except LLMNotConfigured as exc:
-        run.status = "failed"
-        run.error = str(exc)
-        run.finished_at = datetime.datetime.now(datetime.UTC)
-        await db.commit()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        run.status = "failed"
-        run.error = f"模型调用失败: {exc}"
-        run.finished_at = datetime.datetime.now(datetime.UTC)
-        await db.commit()
-        raise HTTPException(status_code=502, detail=f"模型调用失败: {exc}") from exc
-
-    citations = [
-        CitationOut(
-            chunk_id=r.chunk_id,
-            document_id=r.document_id,
-            document_title=r.document_title,
-            page_number=r.page_number,
-            score=r.score,
-            method=r.method,
-            snippet=r.snippet[:300],
+    ).scalar_one()
+    if total_chars >= get_settings().max_context_tokens * 3:
+        await enqueue_task(
+            db,
+            workspace_id=project.workspace_id,
+            project_id=conversation.project_id,
+            kind="conversation_summarize",
+            payload={"conversation_id": str(conversation.id)},
+            max_attempts=2,
         )
-        for r in retrieved
-    ]
-    assistant_message = Message(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=answer,
-        run_id=run.id,
-    )
-    run.status = "completed"
-    run.output = {
-        "citations": [c.chunk_id for c in citations],
-        "retrieved": len(citations),
-        "retrieval_method": citations[0].method if citations else "none",
-    }
-    run.finished_at = datetime.datetime.now(datetime.UTC)
-    conversation.updated_at = run.finished_at
-    db.add(assistant_message)
     await db.commit()
-    await db.refresh(assistant_message)
-
-    return AskOut(
-        conversation_id=conversation.id,
-        message=MessageOut(
-            id=assistant_message.id,
-            role=assistant_message.role,
-            content=assistant_message.content,
-            run_id=assistant_message.run_id,
-            created_at=assistant_message.created_at,
-        ),
-        citations=citations,
-        run_id=run.id,
-    )
+    return AskAcceptedOut(run_id=run.id, user_message_id=user_message.id, status="queued")

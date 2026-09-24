@@ -1,23 +1,106 @@
+from datetime import datetime, timezone
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, require_project_access
 from app.core.database import get_session
-from app.models.tables import Run
-from app.schemas.runs import RunOut
+from app.models.tables import Run, RunEvent, User
+from app.schemas.runs import RunEventOut, RunOut
+from app.services.tasks import enqueue_task
 
 router = APIRouter(prefix="/api/v1", tags=["runs"])
 
 
+async def _load_run(db: AsyncSession, run_id: UUID, user: User) -> Run:
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run 不存在")
+    await require_project_access(run.project_id, user, db)
+    return run
+
+
 @router.get("/runs", response_model=list[RunOut])
-async def list_runs(project_id, db: AsyncSession = Depends(get_session)) -> list[Run]:
+async def list_runs(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[Run]:
+    await require_project_access(project_id, user, db)
     stmt = select(Run).where(Run.project_id == project_id).order_by(Run.created_at.desc())
     return list((await db.execute(stmt)).scalars())
 
 
 @router.get("/runs/{run_id}", response_model=RunOut)
-async def get_run(run_id, db: AsyncSession = Depends(get_session)) -> Run:
-    run = await db.get(Run, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+async def get_run(
+    run_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Run:
+    return await _load_run(db, run_id, user)
+
+
+@router.get("/runs/{run_id}/events", response_model=list[RunEventOut])
+async def list_run_events(
+    run_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[RunEvent]:
+    await _load_run(db, run_id, user)
+    return list(
+        (
+            await db.execute(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq))
+        ).scalars()
+    )
+
+
+@router.post("/runs/{run_id}/cancel", response_model=RunOut)
+async def cancel_run(
+    run_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Run:
+    run = await _load_run(db, run_id, user)
+    if run.status in {"completed", "failed", "cancelled"}:
+        return run
+    run.status = "cancelled"
+    run.finished_at = datetime.now(timezone.utc)
+    next_seq = (
+        await db.execute(select(func.coalesce(func.max(RunEvent.seq), 0) + 1).where(RunEvent.run_id == run.id))
+    ).scalar_one()
+    db.add(RunEvent(run_id=run.id, seq=next_seq, event_type="cancelled", payload={}))
+    await db.commit()
+    await db.refresh(run)
+    return run
+
+
+@router.post("/runs/{run_id}/resume", response_model=RunOut)
+async def resume_run(
+    run_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Run:
+    run = await _load_run(db, run_id, user)
+    if run.status not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="当前 Run 不允许恢复")
+    run.status = "queued"
+    run.error = None
+    run.finished_at = None
+    next_seq = (
+        await db.execute(select(func.coalesce(func.max(RunEvent.seq), 0) + 1).where(RunEvent.run_id == run.id))
+    ).scalar_one()
+    db.add(RunEvent(run_id=run.id, seq=next_seq, event_type="resumed", payload={}))
+    project = await require_project_access(run.project_id, user, db)
+    if run.kind == "chat" and run.conversation_id is not None:
+        await enqueue_task(
+            db,
+            workspace_id=project.workspace_id,
+            project_id=run.project_id,
+            kind="agent_run",
+            payload={"run_id": str(run.id), "conversation_id": str(run.conversation_id)},
+        )
+    await db.commit()
+    await db.refresh(run)
     return run

@@ -1,8 +1,12 @@
 """OpenAI 兼容端点适配器（chat + embeddings）。"""
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.security import decrypt_secret
+from app.models.tables import Project, ProviderProfile
 
 
 class LLMNotConfigured(RuntimeError):
@@ -10,22 +14,30 @@ class LLMNotConfigured(RuntimeError):
 
 
 class LLMClient:
-    def __init__(self, settings: Settings) -> None:
-        self.base_url = settings.llm_base_url.rstrip("/")
-        self.api_key = settings.llm_api_key
-        self.model = settings.llm_model
-        self.embedding_model = settings.embedding_model
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        embedding_model: str | None = None,
+    ) -> None:
+        self.base_url = (base_url if base_url is not None else settings.llm_base_url).rstrip("/")
+        self.api_key = settings.llm_api_key if api_key is None else api_key
+        self.model = settings.llm_model if model is None else model
+        self.embedding_model = settings.embedding_model if embedding_model is None else embedding_model
 
     @property
     def configured(self) -> bool:
-        return bool(self.base_url and self.api_key and self.model)
+        return bool(self.base_url and self.model)
 
     @property
     def embedding_configured(self) -> bool:
-        return bool(self.base_url and self.api_key and self.embedding_model)
+        return bool(self.base_url and self.embedding_model)
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}"}
+        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
     async def chat(self, messages: list[dict], *, temperature: float = 0.2) -> str:
         if not self.configured:
@@ -56,3 +68,22 @@ class LLMClient:
 
 def get_llm() -> LLMClient:
     return LLMClient(get_settings())
+
+
+async def get_llm_for_project(db: AsyncSession, project_id) -> LLMClient:
+    """Resolve the project provider without exposing provider secrets to callers."""
+    settings = get_settings()
+    project = await db.get(Project, project_id)
+    if project is None or project.provider_id is None:
+        return get_llm()
+    provider = await db.get(ProviderProfile, project.provider_id)
+    if provider is None:
+        return get_llm()
+    api_key = decrypt_secret(provider.api_key_ciphertext) if provider.api_key_ciphertext else ""
+    return LLMClient(
+        settings,
+        base_url=provider.base_url,
+        api_key=api_key,
+        model=provider.chat_model,
+        embedding_model=provider.embedding_model,
+    )

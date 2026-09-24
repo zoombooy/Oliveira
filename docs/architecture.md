@@ -66,7 +66,7 @@ Oliveira 自身未来对外提供 MCP / API 时，协议由本项目定义与版
 
 ```
 ┌────────────────────────────────────────────┐
-│        Oliveira Web Console (Vue 3, M1 起)  │
+│        Oliveira Web Console (Vue 3, M3)     │
 │   知识库 / 会话 / Run / 证据 / 审核队列        │
 └──────────────────┬─────────────────────────┘
                    │ HTTP / SSE
@@ -86,7 +86,7 @@ Oliveira 自身未来对外提供 MCP / API 时，协议由本项目定义与版
 └────────────────────┴───────────────────────┘
 ```
 
-第一版部署单元：`api`、`postgres`（含 worker 职责，M2′ 拆出）。
+第一版部署单元：`api`、`worker`、`postgres`、`frontend`。
 Redis、独立检索服务、独立图数据库、工作流框架均非必需，
 由真实瓶颈证据驱动再引入。
 
@@ -162,10 +162,10 @@ Yuxi 的用户记忆是手动画像，Utopia 的图谱是事实账本，这里�
 
 ## 8. Agent Runtime 原则
 
-- M0′/M1′：无 Agent 循环。对话 = 检索 + 单次生成，Run 仅作为
-  审计记录（status 字符串，无状态机）。
-- M2′：有界 ReAct 循环（plan → act → observe，最多 N 步、有预算与超时），
-  **对真实行为固化 Run 状态机**，而不是预先抽象。
+- M0′：对话入口异步化，Run 由 PostgreSQL 任务队列驱动。
+- M2′：有界只读 Agent Runtime（search_chunks / query_facts /
+  get_entity_timeline 的领域边界），最多 6 步、60 秒、12k 上下文，
+  **对真实行为固化 Run 事件**。
 - 工具协议：每个工具声明 `input_schema`、`permission`、`side_effect`
   （none/read/propose/write/external）。第一阶段只开放 none/read。
 - 提案与执行分离：模型只能产出 `answer` 或 `proposal`；
@@ -177,8 +177,8 @@ Yuxi 的用户记忆是手动画像，Utopia 的图谱是事实账本，这里�
 
 权限不依赖前端隐藏按钮或 prompt 约束，后端在工具执行时检查
 （用户 / 项目 / 工具权限 / 资源可见性 / 副作用等级）。
-M0′–M1′ 单用户（demo 账号），认证在 M2′ 引入；
-多租户与 OIDC 列入 M4+。
+M0′–M3′ 使用轻量账号、工作空间成员角色与 Provider 隔离；
+企业 SSO/OIDC、多租户治理列入 M4+。
 
 ## 10. 仓库结构
 
@@ -195,7 +195,7 @@ Oliveira/
 │   └── pyproject.toml
 ├── deploy/postgres/init/  # 首启 DDL（Alembic 自 M1′ 接管演进）
 ├── docs/                  # architecture.md + adr/
-├── frontend/              # M1 起
+├── frontend/              # Vue 3 + TypeScript + Element Plus 工作台
 ├── docker-compose.yml
 └── .env.example
 ```

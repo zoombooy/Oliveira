@@ -8,22 +8,22 @@ Oliveira 是一个完全独立的产品，不是 Yuxi / Utopia 的集成网关�
 领域模型、数据库、运行时、接口与前端均为原创实现。独立性边界见
 [docs/architecture.md](docs/architecture.md)。
 
-## 产品闭环（正在实现）
+## 产品闭环
 
 ```
 文档上传 → 版本化 → 解析切块 → 检索(向量+全文) → Agent 带引用回答
        → 事实抽取(pending) → 人工审核 → 事实版本(双时态) → 按时间回放
 ```
 
-## 当前状态
+## 当前状态（代码已实现，Docker 运行链路待在具备 Docker 的环境验证）
 
 里程碑定义见 [docs/architecture.md](docs/architecture.md) 第 12 节。
 
-- [x] M0′ 仓库与架构基线：README / 架构文档 / DDL / docker-compose / FastAPI 骨架
-- [ ] M0′ 文档上传→解析→切块→入库；最简对话（带引用，LLM 可配置）
-- [ ] M1′ 事实模型落地 + 自动抽取管道 + 检索评估闭环（30 条自建 QA）
-- [ ] M2′ Agent 循环（有界 ReAct）+ 工具注册 + 状态机（对真实行为固化）
-- [ ] M3′ 会话与记忆层（多轮 + 压缩 + MEMORY.md）+ 审核队列 + 冲突检测 + 审计
+- [x] M0′ 文档版本、原文持久化、解析切块、分批 Embedding、混合检索
+- [x] M1′ 账号、工作空间、Provider 加密配置、事实抽取、pending 审核、双时态查询、冲突记录
+- [x] M2′ PostgreSQL 任务队列、Worker、有界只读 Agent、Run 事件、引用校验、取消/恢复 API
+- [x] M3′ 会话摘要任务、结构化用户记忆、事实时间线、Vue 工作台与证据抽屉
+- [ ] 检索评估闭环（30 条 QA 数据集及指标持久化）
 - [ ] M4+ 沙箱 / Skills / MCP Server / 外部副作用
 
 ## 快速开始
@@ -35,6 +35,7 @@ cp .env.example .env          # 按需填写 LLM 配置，不填也能启动
 docker compose up --build -d
 
 curl http://localhost:8000/healthz
+# Web 工作台：http://localhost:5173
 ```
 
 上传文档并对话：
@@ -54,7 +55,12 @@ curl -X POST http://localhost:8000/api/v1/conversations/<conversation_id>/messag
   -H 'Content-Type: application/json' -d '{"content": "这份文档说了什么？"}'
 ```
 
-未配置 LLM 时，上传与检索正常工作，对话接口返回 503 并给出配置提示。
+未配置 LLM 时，上传与关键词检索仍可工作；对话 Run 会进入 failed，
+并在 Run 事件中记录 Provider 未配置，而不是返回伪造答案。
+
+登录页面采用 Oliveira 自己实现的克制、居中登录场景；进入后是侧栏式知识工作台，
+包含项目、对话、知识库、任务/Run、事实审核和证据详情。交互结构参考了用户熟悉的产品，
+但没有引用 Yuxi 或 Utopia 的运行时代码、页面源码、数据库或接口。
 
 ## 配置
 
@@ -83,8 +89,9 @@ Oliveira/
 └── docker-compose.yml
 ```
 
-数据库迁移：M0′ 阶段 schema 由 `deploy/postgres/init/001_init.sql` 建立；
-M1′ 起接入 Alembic 管理演进。
+数据库迁移：全新数据库由 `deploy/postgres/init/001_init.sql` 建立；
+`backend/alembic/versions/0001_bootstrap_baseline.py` 作为迁移基线，
+后续表结构必须通过 Alembic revision 演进，不能直接修改已运行数据库。
 
 ## 许可证与致谢
 
