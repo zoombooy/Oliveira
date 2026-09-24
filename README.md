@@ -643,7 +643,7 @@ Oliveira 使用 [MIT License](LICENSE)。
 
 设计思想参考并致谢：
 
-- [Yuxi（语析）](https://github.com/xerrors/Yuxi)：Agent Run、记忆分层和上下文压缩等公开设计思想；
+- [Yuxi（设计参考）](https://github.com/xerrors/Yuxi)：Agent Run、记忆分层和上下文压缩等公开设计思想；
 - [Utopia](https://github.com/deeplethe/utopia)：双时态、证据溯源、冲突与审计等公开设计思想。
 
 Oliveira 的运行时、数据库、接口和前端实现独立维护。

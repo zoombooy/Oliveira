@@ -118,8 +118,15 @@ function handleError(caught: unknown) { error.value = caught instanceof Error ? 
 
 async function createConversation() {
   if (!projectId.value) {
-    ElMessage.warning('请先选择一个项目')
-    return null
+    if (projects.value.length === 1) {
+      projectId.value = projects.value[0].id
+    } else if (!projects.value.length) {
+      ElMessage.info('当前工作空间还没有知识项目，请先创建一个项目')
+      return null
+    } else {
+      ElMessage.info('请选择本次对话使用的知识项目')
+      return null
+    }
   }
   try {
     const created = await api<Conversation>(`/api/v1/projects/${projectId.value}/conversations`, { method: 'POST', body: JSON.stringify({ title: '新对话' }) })
@@ -137,8 +144,15 @@ async function selectConversation(id: string) {
 async function sendMessage() {
   if (!composer.value.trim() || sending.value) return
   if (!projectId.value) {
-    ElMessage.warning('请先在输入框上方选择项目')
-    return
+    if (projects.value.length === 1) {
+      projectId.value = projects.value[0].id
+    } else if (!projects.value.length) {
+      ElMessage.info('当前工作空间还没有知识项目，请先创建一个项目')
+      return
+    } else {
+      ElMessage.info('请选择本次对话使用的知识项目')
+      return
+    }
   }
   const content = composer.value.trim(); composer.value = ''; sending.value = true
   try {
@@ -310,14 +324,14 @@ onMounted(boot)
         <div v-if="!currentConversation" class="chat-start-screen">
           <div class="chat-greeting">
             <p class="eyebrow">TRACEABLE KNOWLEDGE WORKBENCH</p>
-            <h1>语析，析万物之语</h1>
+            <h1>从证据开始，找到答案</h1>
             <p>从你的资料中寻找答案，保留每一个来源、版本和时间。</p>
           </div>
           <div class="chat-start-composer">
             <div class="chat-project-context">
               <LibraryBig :size="16" />
               <select v-model="projectId" aria-label="选择项目" :disabled="!projects.length">
-                <option value="" disabled>{{ projects.length ? '选择项目' : '请先创建项目' }}</option>
+                <option value="" disabled>{{ projects.length ? '选择知识项目' : '当前工作空间还没有项目' }}</option>
                 <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
               </select>
               <ChevronDown :size="15" />
@@ -332,7 +346,7 @@ onMounted(boot)
                 </div>
                 <div class="composer-actions-right">
                   <span class="composer-model" :title="activeProviderLabel">{{ activeProviderLabel }}</span>
-                  <button type="submit" class="send-button" :disabled="sending || !composer.trim() || !projectId" aria-label="发送"><Send :size="16" /></button>
+                  <button type="submit" class="send-button" :disabled="sending || !composer.trim()" aria-label="发送"><Send :size="16" /></button>
                 </div>
               </div>
             </form>
