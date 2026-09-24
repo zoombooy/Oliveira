@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 class RunOut(BaseModel):
     id: UUID
-    project_id: UUID
+    workspace_id: UUID
+    project_id: UUID | None
     conversation_id: UUID | None
     kind: str
     agent_key: str

@@ -10,7 +10,8 @@ class ConversationCreate(BaseModel):
 
 class ConversationOut(BaseModel):
     id: UUID
-    project_id: UUID
+    workspace_id: UUID
+    project_id: UUID | None
     title: str
     created_at: datetime
 

@@ -98,6 +98,7 @@ async def upload_document(
         project_id, document, filename, file.content_type or "", data, db
     )
     run = Run(
+        workspace_id=project.workspace_id,
         project_id=project_id,
         kind="ingest",
         status="queued",
@@ -137,6 +138,7 @@ async def upload_document_version(
         document.project_id, user, db, roles={"owner", "admin", "member"}
     )
     run = Run(
+        workspace_id=project.workspace_id,
         project_id=document.project_id,
         kind="ingest",
         status="queued",

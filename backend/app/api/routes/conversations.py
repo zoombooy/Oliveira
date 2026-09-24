@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_project_access
+from app.api.deps import get_current_user, require_project_access, require_workspace_member
 from app.core.database import get_session
 from app.core.config import get_settings
 from app.models.tables import Conversation, Message, Run, User
@@ -27,15 +27,34 @@ async def _load_conversation(db: AsyncSession, conversation_id) -> Conversation:
     return conversation
 
 
-@router.post("/projects/{project_id}/conversations", response_model=ConversationOut)
-async def create_conversation(
-    project_id: UUID,
-    body: ConversationCreate | None = None,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_session),
+async def _require_conversation_scope(
+    conversation: Conversation,
+    user: User,
+    db: AsyncSession,
+):
+    await require_workspace_member(conversation.workspace_id, user, db)
+    if conversation.project_id is None:
+        return None
+    project = await require_project_access(conversation.project_id, user, db)
+    if project.workspace_id != conversation.workspace_id:
+        raise HTTPException(status_code=409, detail="会话作用域与项目工作空间不一致")
+    return project
+
+
+async def _create_conversation(
+    workspace_id: UUID,
+    project_id: UUID | None,
+    body: ConversationCreate | None,
+    user: User,
+    db: AsyncSession,
 ) -> Conversation:
-    await require_project_access(project_id, user, db)
+    await require_workspace_member(workspace_id, user, db)
+    if project_id is not None:
+        project = await require_project_access(project_id, user, db)
+        if project.workspace_id != workspace_id:
+            raise HTTPException(status_code=400, detail="项目不属于该工作空间")
     conversation = Conversation(
+        workspace_id=workspace_id,
         project_id=project_id,
         user_id=user.id,
         title=(body.title if body else None) or "新对话",
@@ -44,6 +63,42 @@ async def create_conversation(
     await db.commit()
     await db.refresh(conversation)
     return conversation
+
+
+@router.post("/workspaces/{workspace_id}/conversations", response_model=ConversationOut)
+async def create_workspace_conversation(
+    workspace_id: UUID,
+    body: ConversationCreate | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Conversation:
+    return await _create_conversation(workspace_id, None, body, user, db)
+
+
+@router.get("/workspaces/{workspace_id}/conversations", response_model=list[ConversationOut])
+async def list_workspace_conversations(
+    workspace_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[Conversation]:
+    await require_workspace_member(workspace_id, user, db)
+    stmt = (
+        select(Conversation)
+        .where(Conversation.workspace_id == workspace_id)
+        .order_by(Conversation.updated_at.desc())
+    )
+    return list((await db.execute(stmt)).scalars())
+
+
+@router.post("/projects/{project_id}/conversations", response_model=ConversationOut)
+async def create_conversation(
+    project_id: UUID,
+    body: ConversationCreate | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Conversation:
+    project = await require_project_access(project_id, user, db)
+    return await _create_conversation(project.workspace_id, project_id, body, user, db)
 
 
 @router.get("/projects/{project_id}/conversations", response_model=list[ConversationOut])
@@ -71,7 +126,7 @@ async def list_messages(
     db: AsyncSession = Depends(get_session),
 ) -> list[MessageOut]:
     conversation = await _load_conversation(db, conversation_id)
-    await require_project_access(conversation.project_id, user, db)
+    await _require_conversation_scope(conversation, user, db)
     stmt = (
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -88,8 +143,9 @@ async def ask(
     db: AsyncSession = Depends(get_session),
 ) -> AskAcceptedOut:
     conversation = await _load_conversation(db, conversation_id)
-    project = await require_project_access(conversation.project_id, user, db)
+    await _require_conversation_scope(conversation, user, db)
     run = Run(
+        workspace_id=conversation.workspace_id,
         project_id=conversation.project_id,
         conversation_id=conversation.id,
         kind="chat",
@@ -102,7 +158,7 @@ async def ask(
     await append_run_event(db, run.id, "queued", {"question_length": len(body.content)})
     await enqueue_task(
         db,
-        workspace_id=project.workspace_id,
+        workspace_id=conversation.workspace_id,
         project_id=conversation.project_id,
         kind="agent_run",
         payload={"run_id": str(run.id), "conversation_id": str(conversation.id)},
@@ -117,7 +173,7 @@ async def ask(
     if total_chars >= get_settings().max_context_tokens * 3:
         await enqueue_task(
             db,
-            workspace_id=project.workspace_id,
+            workspace_id=conversation.workspace_id,
             project_id=conversation.project_id,
             kind="conversation_summarize",
             payload={"conversation_id": str(conversation.id)},

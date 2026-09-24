@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_project_access
+from app.api.deps import get_current_user, require_project_access, require_workspace_member
 from app.core.database import get_session
 from app.models.tables import Run, RunEvent, User
 from app.schemas.runs import RunEventOut, RunOut
@@ -18,7 +18,12 @@ async def _load_run(db: AsyncSession, run_id: UUID, user: User) -> Run:
     run = await db.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run 不存在")
-    await require_project_access(run.project_id, user, db)
+    if run.project_id is not None:
+        project = await require_project_access(run.project_id, user, db)
+        if project.workspace_id != run.workspace_id:
+            raise HTTPException(status_code=409, detail="Run 作用域与项目工作空间不一致")
+    else:
+        await require_workspace_member(run.workspace_id, user, db)
     return run
 
 
@@ -30,6 +35,17 @@ async def list_runs(
 ) -> list[Run]:
     await require_project_access(project_id, user, db)
     stmt = select(Run).where(Run.project_id == project_id).order_by(Run.created_at.desc())
+    return list((await db.execute(stmt)).scalars())
+
+
+@router.get("/workspaces/{workspace_id}/runs", response_model=list[RunOut])
+async def list_workspace_runs(
+    workspace_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[Run]:
+    await require_workspace_member(workspace_id, user, db)
+    stmt = select(Run).where(Run.workspace_id == workspace_id).order_by(Run.created_at.desc())
     return list((await db.execute(stmt)).scalars())
 
 
@@ -92,11 +108,16 @@ async def resume_run(
         await db.execute(select(func.coalesce(func.max(RunEvent.seq), 0) + 1).where(RunEvent.run_id == run.id))
     ).scalar_one()
     db.add(RunEvent(run_id=run.id, seq=next_seq, event_type="resumed", payload={}))
-    project = await require_project_access(run.project_id, user, db)
+    if run.project_id is not None:
+        project = await require_project_access(run.project_id, user, db)
+        workspace_id = project.workspace_id
+    else:
+        await require_workspace_member(run.workspace_id, user, db)
+        workspace_id = run.workspace_id
     if run.kind == "chat" and run.conversation_id is not None:
         await enqueue_task(
             db,
-            workspace_id=project.workspace_id,
+            workspace_id=workspace_id,
             project_id=run.project_id,
             kind="agent_run",
             payload={"run_id": str(run.id), "conversation_id": str(run.conversation_id)},

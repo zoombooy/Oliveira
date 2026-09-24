@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import Conversation, ConversationSummary, Message, Task
-from app.services.llm import get_llm_for_project
+from app.services.llm import get_llm_for_scope
 
 
 async def execute_conversation_summary(db: AsyncSession, task: Task) -> dict:
@@ -21,7 +21,7 @@ async def execute_conversation_summary(db: AsyncSession, task: Task) -> dict:
     )
     if len(messages) < 4:
         return {"summarized": False, "reason": "message_count_below_threshold"}
-    llm = await get_llm_for_project(db, conversation.project_id)
+    llm = await get_llm_for_scope(db, conversation.workspace_id, conversation.project_id)
     transcript = "\n".join(f"{item.role}: {item.content}" for item in messages[:-4])
     result = await llm.chat(
         [

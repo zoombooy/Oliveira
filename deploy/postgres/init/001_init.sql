@@ -182,12 +182,15 @@ CREATE TABLE fact_conflicts (
 
 CREATE TABLE conversations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
+    workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    project_id uuid REFERENCES projects(id),
     user_id uuid REFERENCES users(id),
     title text NOT NULL DEFAULT '新对话',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_conversations_workspace ON conversations(workspace_id, created_at);
+CREATE INDEX idx_conversations_project ON conversations(project_id, created_at);
 
 CREATE TABLE messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -226,7 +229,8 @@ CREATE INDEX idx_user_memories_active ON user_memories(user_id, status);
 
 CREATE TABLE runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
+    workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    project_id uuid REFERENCES projects(id),
     conversation_id uuid REFERENCES conversations(id),
     kind text NOT NULL DEFAULT 'chat',
     agent_key text NOT NULL DEFAULT 'basic',
@@ -238,6 +242,7 @@ CREATE TABLE runs (
     finished_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_runs_workspace ON runs(workspace_id, created_at);
 CREATE INDEX idx_runs_project ON runs(project_id, created_at);
 
 CREATE TABLE run_events (

@@ -51,6 +51,13 @@ const currentProject = computed(() => projects.value.find(item => item.id === pr
 const currentConversation = computed(() => conversations.value.find(item => item.id === conversationId.value))
 const currentProvider = computed(() => providers.value.find(item => item.id === currentProject.value?.provider_id) || providers.value.find(item => item.is_default))
 const activeProviderLabel = computed(() => currentProvider.value?.chat_model || '选择模型')
+const chatScopeHint = computed(() => currentProject.value
+  ? `当前使用「${currentProject.value.name}」的知识库，回答会附带可追溯证据。`
+  : '当前是工作空间对话；选择一个项目后，Oliveira 才会检索对应知识库并返回引用。')
+const chatModeLabel = computed(() => currentProject.value ? '证据优先' : '通用对话')
+const chatPlaceholder = computed(() => currentProject.value
+  ? '问点什么？使用 @ 可以选择文件或知识库进行引用。'
+  : '问点什么？这是工作空间通用对话，不需要先创建项目。')
 const runCitations = computed(() => (currentRun.value?.output?.citations as SearchResult[] | undefined) || [])
 const panelTitle = computed(() => ({ chat: '对话', documents: '知识库', search: '检索', facts: '事实审核', timeline: '时间线', runs: '运行记录', memories: '用户记忆', settings: '工作空间设置' }[panel.value]))
 
@@ -68,8 +75,8 @@ async function loadWorkspace() {
   if (!workspaceId.value) return
   projects.value = await api<Project[]>(`/api/v1/projects?workspace_id=${workspaceId.value}`)
   providers.value = await api<Provider[]>(`/api/v1/workspaces/${workspaceId.value}/providers`)
-  projectId.value = projects.value[0]?.id || ''
-  await loadProject()
+  projectId.value = ''
+  await loadScope()
 }
 
 async function refreshWorkspace() {
@@ -79,21 +86,29 @@ async function refreshWorkspace() {
   providers.value = await api<Provider[]>(`/api/v1/workspaces/${workspaceId.value}/providers`)
   projectId.value = projects.value.some(item => item.id === previousProjectId)
     ? previousProjectId
-    : projects.value[0]?.id || ''
-  await loadProject()
+    : ''
+  await loadScope()
 }
 
-async function loadProject() {
-  if (!projectId.value) return
+async function loadScope() {
+  if (!workspaceId.value) return
   loading.value = true
   try {
-    const [docs, chats, factList, reviews, runList] = await Promise.all([
-      api<Document[]>(`/api/v1/projects/${projectId.value}/documents`),
-      api<Conversation[]>(`/api/v1/projects/${projectId.value}/conversations`),
-      api<Fact[]>(`/api/v1/projects/${projectId.value}/facts`),
-      api<ReviewItem[]>(`/api/v1/projects/${projectId.value}/review-items`),
-      api<Run[]>(`/api/v1/runs?project_id=${projectId.value}`),
-    ])
+    const [docs, chats, factList, reviews, runList] = projectId.value
+      ? await Promise.all([
+          api<Document[]>(`/api/v1/projects/${projectId.value}/documents`),
+          api<Conversation[]>(`/api/v1/projects/${projectId.value}/conversations`),
+          api<Fact[]>(`/api/v1/projects/${projectId.value}/facts`),
+          api<ReviewItem[]>(`/api/v1/projects/${projectId.value}/review-items`),
+          api<Run[]>(`/api/v1/runs?project_id=${projectId.value}`),
+        ])
+      : await Promise.all([
+          Promise.resolve([] as Document[]),
+          api<Conversation[]>(`/api/v1/workspaces/${workspaceId.value}/conversations`),
+          Promise.resolve([] as Fact[]),
+          Promise.resolve([] as ReviewItem[]),
+          api<Run[]>(`/api/v1/workspaces/${workspaceId.value}/runs`),
+        ])
     documents.value = docs; conversations.value = chats; facts.value = factList; reviewItems.value = reviews; runs.value = runList
     conversationId.value = conversations.value[0]?.id || ''
     messages.value = conversationId.value
@@ -117,19 +132,11 @@ function logout() { clearToken(); loggedIn.value = false; user.value = null; wor
 function handleError(caught: unknown) { error.value = caught instanceof Error ? caught.message : '操作失败'; ElMessage.error(error.value) }
 
 async function createConversation() {
-  if (!projectId.value) {
-    if (projects.value.length === 1) {
-      projectId.value = projects.value[0].id
-    } else if (!projects.value.length) {
-      ElMessage.info('当前工作空间还没有知识项目，请先创建一个项目')
-      return null
-    } else {
-      ElMessage.info('请选择本次对话使用的知识项目')
-      return null
-    }
-  }
   try {
-    const created = await api<Conversation>(`/api/v1/projects/${projectId.value}/conversations`, { method: 'POST', body: JSON.stringify({ title: '新对话' }) })
+    const endpoint = projectId.value
+      ? `/api/v1/projects/${projectId.value}/conversations`
+      : `/api/v1/workspaces/${workspaceId.value}/conversations`
+    const created = await api<Conversation>(endpoint, { method: 'POST', body: JSON.stringify({ title: '新对话' }) })
     conversations.value.unshift(created); conversationId.value = created.id; messages.value = []; panel.value = 'chat'
     return created
   } catch (caught) { handleError(caught); return null }
@@ -143,17 +150,6 @@ async function selectConversation(id: string) {
 
 async function sendMessage() {
   if (!composer.value.trim() || sending.value) return
-  if (!projectId.value) {
-    if (projects.value.length === 1) {
-      projectId.value = projects.value[0].id
-    } else if (!projects.value.length) {
-      ElMessage.info('当前工作空间还没有知识项目，请先创建一个项目')
-      return
-    } else {
-      ElMessage.info('请选择本次对话使用的知识项目')
-      return
-    }
-  }
   const content = composer.value.trim(); composer.value = ''; sending.value = true
   try {
     if (!conversationId.value && !await createConversation()) return
@@ -161,7 +157,7 @@ async function sendMessage() {
     messages.value.push({ id: accepted.user_message_id, role: 'user', content, created_at: new Date().toISOString() })
     currentRun.value = await pollRun(accepted.run_id)
     messages.value = await api<ChatMessage[]>(`/api/v1/conversations/${conversationId.value}/messages`)
-    await loadProject()
+    await loadScope()
   } catch (caught) { handleError(caught) } finally { sending.value = false }
 }
 
@@ -189,7 +185,12 @@ async function uploadDocument(event: Event) {
 
 async function createProject() {
   if (!newProjectName.value.trim() || !workspaceId.value) return
-  try { await api<Project>('/api/v1/projects', { method: 'POST', body: JSON.stringify({ name: newProjectName.value, workspace_id: workspaceId.value }) }); newProjectName.value = ''; await loadWorkspace(); ElMessage.success('项目已创建') } catch (caught) { handleError(caught) }
+  try {
+    await api<Project>('/api/v1/projects', { method: 'POST', body: JSON.stringify({ name: newProjectName.value, workspace_id: workspaceId.value }) })
+    newProjectName.value = ''
+    await refreshWorkspace()
+    ElMessage.success('项目已创建')
+  } catch (caught) { handleError(caught) }
 }
 
 async function loadFacts() { if (projectId.value) { facts.value = await api<Fact[]>(`/api/v1/projects/${projectId.value}/facts`); reviewItems.value = await api<ReviewItem[]>(`/api/v1/projects/${projectId.value}/review-items`) } }
@@ -198,7 +199,7 @@ async function loadMemories() { memories.value = await api<Memory[]>('/api/v1/us
 async function createMemory() { if (!newMemoryKey.value.trim() || !newMemoryValue.value.trim()) return; try { await api('/api/v1/users/me/memories', { method: 'POST', body: JSON.stringify({ key: newMemoryKey.value, value: newMemoryValue.value }) }); newMemoryKey.value = ''; newMemoryValue.value = ''; await loadMemories() } catch (caught) { handleError(caught) } }
 async function retractMemory(memory: Memory) { try { await api(`/api/v1/users/me/memories/${memory.id}`, { method: 'DELETE' }); await loadMemories() } catch (caught) { handleError(caught) } }
 watch(workspaceId, () => { if (loggedIn.value) loadWorkspace() })
-watch(projectId, () => { if (loggedIn.value) loadProject() })
+watch(projectId, () => { if (loggedIn.value) loadScope() })
 watch(panel, (value) => { if (value === 'memories' && loggedIn.value) loadMemories() })
 onMounted(boot)
 </script>
@@ -292,7 +293,7 @@ onMounted(boot)
       </div>
       <div v-if="!collapsed" class="project-picker">
         <div class="project-picker-heading"><span>当前项目</span><button class="tiny-button" aria-label="新建项目" title="新建项目" @click="panel = 'settings'"><Plus :size="15" /></button></div>
-        <div class="select-shell project-select"><select v-model="projectId" aria-label="选择项目"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span class="select-chevron" aria-hidden="true"><ChevronDown :size="14" /></span></div>
+        <div class="select-shell project-select"><select v-model="projectId" aria-label="选择项目"><option value="">工作空间对话（不限定项目）</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span class="select-chevron" aria-hidden="true"><ChevronDown :size="14" /></span></div>
       </div>
       <button class="sidebar-primary-action" @click="createConversation"><MessageCirclePlus :size="16" /><span v-if="!collapsed">新建对话</span></button>
       <nav class="primary-nav" aria-label="主导航">
@@ -316,7 +317,7 @@ onMounted(boot)
 
     <main class="main-stage">
       <header class="topbar">
-        <div class="topbar-heading"><div class="breadcrumbs"><span>{{ currentWorkspace?.name || '工作空间' }}</span><i>/</i><strong>{{ currentProject?.name || '未选择项目' }}</strong></div><div class="topbar-title-row"><h2>{{ panelTitle }}</h2><span v-if="currentProject" class="context-chip">项目空间</span></div></div>
+        <div class="topbar-heading"><div class="breadcrumbs"><span>{{ currentWorkspace?.name || '工作空间' }}</span><i>/</i><strong>{{ currentProject?.name || '工作空间对话' }}</strong></div><div class="topbar-title-row"><h2>{{ panelTitle }}</h2><span class="context-chip">{{ currentProject ? '项目空间' : '工作空间' }}</span></div></div>
         <div class="topbar-actions"><span class="sync-status"><i /> 数据源已同步</span><button class="quiet-action" aria-label="新建对话" @click="createConversation"><MessageCirclePlus :size="16" /><span>新对话</span></button></div>
       </header>
       <div v-if="error" class="error-banner">{{ error }}<button @click="error = ''">×</button></div>
@@ -325,24 +326,24 @@ onMounted(boot)
           <div class="chat-greeting">
             <p class="eyebrow">TRACEABLE KNOWLEDGE WORKBENCH</p>
             <h1>从证据开始，找到答案</h1>
-            <p>从你的资料中寻找答案，保留每一个来源、版本和时间。</p>
+            <p>{{ chatScopeHint }}</p>
           </div>
           <div class="chat-start-composer">
             <div class="chat-project-context">
               <LibraryBig :size="16" />
-              <select v-model="projectId" aria-label="选择项目" :disabled="!projects.length">
-                <option value="" disabled>{{ projects.length ? '选择知识项目' : '当前工作空间还没有项目' }}</option>
+              <select v-model="projectId" aria-label="选择项目">
+                <option value="">工作空间对话 · 不限定项目</option>
                 <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
               </select>
               <ChevronDown :size="15" />
             </div>
             <form class="composer yuxi-composer" @submit.prevent="sendMessage">
-              <textarea v-model="composer" :disabled="sending" placeholder="问点什么？使用 @ 可以选择文件、知识库或技能进行引用。" rows="2" @keydown.enter.exact.prevent="sendMessage" />
+              <textarea v-model="composer" :disabled="sending" :placeholder="chatPlaceholder" rows="2" @keydown.enter.exact.prevent="sendMessage" />
               <div class="composer-actions">
                 <div class="composer-actions-left">
                   <button type="button" class="composer-icon-button" aria-label="打开知识库" title="打开知识库" @click="panel = 'documents'"><Plus :size="18" /></button>
-                  <button type="button" class="composer-tool-button" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
-                  <span class="composer-mode">证据优先</span>
+                  <button type="button" class="composer-tool-button" :disabled="!projectId" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
+                  <span class="composer-mode">{{ chatModeLabel }}</span>
                 </div>
                 <div class="composer-actions-right">
                   <span class="composer-model" :title="activeProviderLabel">{{ activeProviderLabel }}</span>
@@ -360,12 +361,12 @@ onMounted(boot)
             <div v-if="sending" class="thinking"><span /><span /><span />正在检索并核对来源…</div>
           </div>
           <form class="composer yuxi-composer chat-composer" @submit.prevent="sendMessage">
-            <textarea v-model="composer" :disabled="sending" placeholder="问点什么？使用 @ 可以选择文件、知识库或技能进行引用。" rows="2" @keydown.enter.exact.prevent="sendMessage" />
+            <textarea v-model="composer" :disabled="sending" :placeholder="chatPlaceholder" rows="2" @keydown.enter.exact.prevent="sendMessage" />
             <div class="composer-actions">
               <div class="composer-actions-left">
                 <button type="button" class="composer-icon-button" aria-label="打开知识库" title="打开知识库" @click="panel = 'documents'"><Plus :size="18" /></button>
-                <button type="button" class="composer-tool-button" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
-                <span class="composer-mode">证据优先</span>
+                <button type="button" class="composer-tool-button" :disabled="!projectId" @click="panel = 'search'">检索知识 <ChevronDown :size="14" /></button>
+                <span class="composer-mode">{{ chatModeLabel }}</span>
               </div>
               <div class="composer-actions-right">
                 <span class="composer-model" :title="activeProviderLabel">{{ activeProviderLabel }}</span>

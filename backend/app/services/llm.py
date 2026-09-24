@@ -70,21 +70,26 @@ def get_llm() -> LLMClient:
     return LLMClient(get_settings())
 
 
-async def get_llm_for_project(db: AsyncSession, project_id) -> LLMClient:
-    """Resolve the project provider without exposing provider secrets to callers."""
+async def get_llm_for_scope(
+    db: AsyncSession,
+    workspace_id,
+    project_id=None,
+) -> LLMClient:
+    """Resolve a project provider or the workspace default provider."""
     settings = get_settings()
-    project = await db.get(Project, project_id)
-    if project is None:
-        return get_llm()
-    provider = await db.get(ProviderProfile, project.provider_id) if project.provider_id else None
-    if provider is not None and provider.workspace_id != project.workspace_id:
-        provider = None
+    provider = None
+    if project_id is not None:
+        project = await db.get(Project, project_id)
+        if project is not None and project.workspace_id == workspace_id:
+            provider = await db.get(ProviderProfile, project.provider_id) if project.provider_id else None
+            if provider is not None and provider.workspace_id != workspace_id:
+                provider = None
     if provider is None:
         provider = (
             await db.execute(
                 select(ProviderProfile)
                 .where(
-                    ProviderProfile.workspace_id == project.workspace_id,
+                    ProviderProfile.workspace_id == workspace_id,
                     ProviderProfile.is_default.is_(True),
                 )
                 .order_by(ProviderProfile.created_at)
@@ -101,3 +106,11 @@ async def get_llm_for_project(db: AsyncSession, project_id) -> LLMClient:
         model=provider.chat_model,
         embedding_model=provider.embedding_model,
     )
+
+
+async def get_llm_for_project(db: AsyncSession, project_id) -> LLMClient:
+    """Backward-compatible project provider resolver for pipelines."""
+    project = await db.get(Project, project_id)
+    if project is None:
+        return get_llm()
+    return await get_llm_for_scope(db, project.workspace_id, project.id)

@@ -251,7 +251,12 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[UUID] = uuid_column()
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
+    workspace_id: Mapped[UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     title: Mapped[str] = mapped_column(Text, default="新对话")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -305,7 +310,12 @@ class Run(Base):
     __tablename__ = "runs"
 
     id: Mapped[UUID] = uuid_column()
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
+    workspace_id: Mapped[UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     conversation_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("conversations.id"), nullable=True
     )

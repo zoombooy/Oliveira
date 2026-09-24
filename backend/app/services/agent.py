@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models.tables import Conversation, Message, Run
 from app.services.agent_tools import ToolContext, build_default_registry
-from app.services.llm import LLMNotConfigured, get_llm_for_project
+from app.services.llm import LLMNotConfigured, get_llm_for_scope
 from app.services.run_events import append_run_event
 
 
@@ -36,9 +36,7 @@ async def run_bounded_agent(
 ) -> AgentResult:
     settings = get_settings()
     started = time.monotonic()
-    llm = await get_llm_for_project(db, run.project_id)
-    registry = build_default_registry()
-    tool_context = ToolContext(db=db, project_id=run.project_id, run_id=run.id)
+    llm = await get_llm_for_scope(db, run.workspace_id, run.project_id)
     messages = list(
         (
             await db.execute(
@@ -51,39 +49,51 @@ async def run_bounded_agent(
     )
     messages.reverse()
 
-    search_args = {"query": question, "top_k": settings.retrieval_top_k}
-    await append_run_event(db, run.id, "tool_call", {"tool": "search_chunks", "arguments": search_args})
-    search_result = await registry.invoke("search_chunks", search_args, tool_context)
-    citations = search_result.evidence
-    await append_run_event(
-        db,
-        run.id,
-        "tool_result",
-        {
-            "tool": "search_chunks",
-            "count": len(citations),
-            "evidence": citations,
-            "elapsed_ms": search_result.elapsed_ms,
-        },
-    )
+    citations: list[dict] = []
+    facts: list[dict] = []
+    if run.project_id is not None:
+        registry = build_default_registry()
+        tool_context = ToolContext(db=db, project_id=run.project_id, run_id=run.id)
+        search_args = {"query": question, "top_k": settings.retrieval_top_k}
+        await append_run_event(db, run.id, "tool_call", {"tool": "search_chunks", "arguments": search_args})
+        search_result = await registry.invoke("search_chunks", search_args, tool_context)
+        citations = search_result.evidence
+        await append_run_event(
+            db,
+            run.id,
+            "tool_result",
+            {
+                "tool": "search_chunks",
+                "count": len(citations),
+                "evidence": citations,
+                "elapsed_ms": search_result.elapsed_ms,
+            },
+        )
 
-    if time.monotonic() - started > settings.max_agent_runtime_seconds:
-        raise TimeoutError("Agent 超过最大运行时间")
-    facts_args = {"query": question, "limit": 20}
-    await append_run_event(db, run.id, "tool_call", {"tool": "query_facts", "arguments": facts_args})
-    facts_result = await registry.invoke("query_facts", facts_args, tool_context)
-    facts = facts_result.output["facts"]
-    await append_run_event(
-        db,
-        run.id,
-        "tool_result",
-        {
-            "tool": "query_facts",
-            "count": len(facts),
-            "facts": facts,
-            "elapsed_ms": facts_result.elapsed_ms,
-        },
-    )
+        if time.monotonic() - started > settings.max_agent_runtime_seconds:
+            raise TimeoutError("Agent 超过最大运行时间")
+        facts_args = {"query": question, "limit": 20}
+        await append_run_event(db, run.id, "tool_call", {"tool": "query_facts", "arguments": facts_args})
+        facts_result = await registry.invoke("query_facts", facts_args, tool_context)
+        facts = facts_result.output["facts"]
+        await append_run_event(
+            db,
+            run.id,
+            "tool_result",
+            {
+                "tool": "query_facts",
+                "count": len(facts),
+                "facts": facts,
+                "elapsed_ms": facts_result.elapsed_ms,
+            },
+        )
+    else:
+        await append_run_event(
+            db,
+            run.id,
+            "scope_resolved",
+            {"scope_type": "workspace", "project_id": None, "knowledge_tools": False},
+        )
 
     context = "\n\n".join(
         f"[{index}] {item['document_title']}"
@@ -98,6 +108,7 @@ async def run_bounded_agent(
     history = "\n".join(f"{item.role}: {item.content}" for item in messages[-8:])
     prompt = (
         f"对话历史：\n{history}\n\n"
+        f"当前知识范围：{'项目知识库' if run.project_id is not None else '工作空间通用对话'}\n"
         f"证据块（只能引用这些编号）：\n{context or '无'}\n\n"
         f"已审核事实：\n{fact_context or '无'}\n\n"
         f"用户问题：{question}\n"
@@ -109,7 +120,11 @@ async def run_bounded_agent(
         [
             {
                 "role": "system",
-                "content": "你是 Oliveira 的可信知识助手，只基于给定上下文回答。",
+                "content": (
+                    "你是 Oliveira 的可信知识助手，只基于给定上下文回答。"
+                    if run.project_id is not None
+                    else "你是 Oliveira 的通用助手。当前没有选择知识项目，不要伪造知识库引用。"
+                ),
             },
             {"role": "user", "content": prompt},
         ]
