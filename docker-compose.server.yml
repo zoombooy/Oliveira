@@ -24,5 +24,7 @@ services:
       dockerfile: Dockerfile.static
       args:
         NODE_IMAGE: node:22-bookworm
+    security_opt:
+      - seccomp=unconfined
     ports: !override
       - "${FRONTEND_PORT:-5173}:80"
