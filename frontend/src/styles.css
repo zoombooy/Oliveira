@@ -127,7 +127,7 @@ button:disabled { cursor: not-allowed; }
 .user-chip strong, .user-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-chip strong { color: #343b3b; font-size: 11px; }
 .user-chip small { color: #8d9696; font-size: 9px; }
-.user-chip button { border: 0; color: #8d9696; background: transparent; transform: rotate(90deg); }
+.user-chip button { border: 0; color: #8d9696; background: transparent; }
 
 .main-stage { min-width: 0; min-height: 100vh; flex: 1; background: #fff; }
 .topbar { min-height: 76px; padding: 17px 56px 15px; border-bottom: 1px solid #edf0f0; background: #fff; }
@@ -432,3 +432,59 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .composer-model { max-width: 110px; }
   .yuxi-composer { border-radius: 20px; }
 }
+
+/* Controls use the same icon discipline as Yuxi/Utopia: SVG icons, fixed hit
+   areas, and one optical center. Text glyphs and rotated arrows change shape
+   and baseline across fonts, so they are not used as controls. */
+.auth-submit svg { display: block; flex: 0 0 16px; stroke-width: 1.9; }
+.select-shell { min-height: 30px; padding-right: 31px; }
+.select-shell select { min-height: 30px; }
+.select-shell .select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  border: 1px solid #edf1f4;
+  border-radius: 50%;
+  color: #8795a2;
+  background: #f8fafb;
+  line-height: 0;
+  transform: translateY(-50%);
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.select-shell:hover .select-chevron,
+.select-shell:focus-within .select-chevron {
+  border-color: #c8e2eb;
+  color: #579eb5;
+  background: #eef8fb;
+}
+.select-shell .select-chevron svg { display: block; width: 14px; height: 14px; stroke-width: 1.8; }
+.user-chip button.user-action-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #8795a2;
+  background: transparent;
+  cursor: pointer;
+  transform: none;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.user-chip button.user-action-button:hover {
+  border-color: #e0edf2;
+  color: #4f8fa5;
+  background: #f0f8fa;
+}
+.user-chip button.user-action-button:focus-visible {
+  outline: 3px solid rgba(143, 201, 218, .25);
+  outline-offset: 1px;
+}
+.user-chip button.user-action-button svg { display: block; stroke-width: 1.8; }

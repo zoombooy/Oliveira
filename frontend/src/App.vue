@@ -2,9 +2,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  BarChart3, ChevronDown, ClipboardList, FileText, GitBranch, HardDrive, LibraryBig,
-  LockKeyhole, MessageCircle, MessageCirclePlus, PanelLeft, PanelLeftOpen, Plus, Search,
-  Send, Settings, UserRound, X,
+  ArrowUpRight, BarChart3, ChevronDown, ClipboardList, FileText, GitBranch, HardDrive,
+  LibraryBig, LockKeyhole, LogOut, MessageCircle, MessageCirclePlus, PanelLeft, PanelLeftOpen,
+  Plus, Search, Send, Settings, UserRound, X,
 } from '@lucide/vue'
 import { api, clearToken, isLoggedIn, login, register, type Conversation, type Document, type Fact, type Memory, type Message as ChatMessage, type Project, type Provider, type ReviewItem, type Run, type User, type Workspace, type SearchResult } from './api'
 import ModelProvidersPanel from './components/ModelProvidersPanel.vue'
@@ -271,7 +271,7 @@ onMounted(boot)
           <label v-if="authMode === 'register'">显示名称<input v-model="displayName" autocomplete="name" placeholder="你的名字" required /></label>
           <label>密码<input v-model="password" type="password" autocomplete="current-password" placeholder="至少 8 位字符" minlength="8" required /></label>
           <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
-          <button class="primary-button auth-submit" type="submit" :disabled="authBusy">{{ authBusy ? '正在进入…' : authMode === 'login' ? '登录' : '创建空间' }}<span>↗</span></button>
+          <button class="primary-button auth-submit" type="submit" :disabled="authBusy">{{ authBusy ? '正在进入…' : authMode === 'login' ? '登录' : '创建空间' }}<ArrowUpRight :size="16" aria-hidden="true" /></button>
         </form>
         <p class="auth-footnote"><LockKeyhole :size="14" /> 你的资料只属于你的工作空间</p>
       </section>
@@ -288,11 +288,11 @@ onMounted(boot)
       </div>
       <div class="workspace-picker" :title="currentWorkspace?.name">
         <div class="picker-label"><HardDrive :size="14" /><span v-if="!collapsed">工作空间</span></div>
-        <div v-if="!collapsed" class="select-shell"><select v-model="workspaceId" aria-label="选择工作空间"><option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">{{ workspace.name }}</option></select><span>⌄</span></div>
+        <div v-if="!collapsed" class="select-shell"><select v-model="workspaceId" aria-label="选择工作空间"><option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">{{ workspace.name }}</option></select><span class="select-chevron" aria-hidden="true"><ChevronDown :size="14" /></span></div>
       </div>
       <div v-if="!collapsed" class="project-picker">
         <div class="project-picker-heading"><span>当前项目</span><button class="tiny-button" aria-label="新建项目" title="新建项目" @click="panel = 'settings'"><Plus :size="15" /></button></div>
-        <div class="select-shell project-select"><select v-model="projectId" aria-label="选择项目"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span>⌄</span></div>
+        <div class="select-shell project-select"><select v-model="projectId" aria-label="选择项目"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span class="select-chevron" aria-hidden="true"><ChevronDown :size="14" /></span></div>
       </div>
       <button class="sidebar-primary-action" @click="createConversation"><MessageCirclePlus :size="16" /><span v-if="!collapsed">新建对话</span></button>
       <nav class="primary-nav" aria-label="主导航">
@@ -310,7 +310,7 @@ onMounted(boot)
       <div class="sidebar-bottom">
         <button :title="collapsed ? '我的记忆' : undefined" :class="{ active: panel === 'memories' }" @click="panel = 'memories'"><span class="nav-icon"><UserRound :size="17" /></span><span v-if="!collapsed">我的记忆</span></button>
         <button :title="collapsed ? '设置' : undefined" :class="{ active: panel === 'settings' }" @click="panel = 'settings'"><span class="nav-icon"><Settings :size="17" /></span><span v-if="!collapsed">设置</span></button>
-        <div class="user-chip" v-if="!collapsed"><span class="user-avatar">{{ (user?.display_name || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.display_name || 'Oliveira 用户' }}</strong><small>{{ user?.username }}</small></div><button aria-label="退出登录" title="退出登录" @click="logout">↗</button></div>
+        <div class="user-chip" v-if="!collapsed"><span class="user-avatar">{{ (user?.display_name || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.display_name || 'Oliveira 用户' }}</strong><small>{{ user?.username }}</small></div><button class="user-action-button" aria-label="退出登录" title="退出登录" @click="logout"><LogOut :size="15" aria-hidden="true" /></button></div>
       </div>
     </aside>
 
