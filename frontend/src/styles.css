@@ -25,23 +25,23 @@ button:disabled { cursor: not-allowed; }
 
 /* Login: the pale topology field is intentionally close to the reference white screen. */
 .auth-scene { min-height: 100vh; position: relative; overflow: hidden; background: #fbfcfb; color: var(--ink); }
-.auth-scene::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.96), rgba(255,255,255,.76) 37%, rgba(244,248,247,.55) 100%); z-index: 1; }
-.auth-network { position: absolute; inset: 0; z-index: 0; opacity: .92; }
+.auth-scene::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.92), rgba(255,255,255,.65) 37%, rgba(244,248,247,.32) 100%); z-index: 1; }
+.auth-network { position: absolute; inset: 0; z-index: 0; opacity: .97; }
 .auth-network svg { display: block; width: 100%; height: 100%; }
-.network-lines path { fill: none; stroke: #d9e0de; stroke-width: .85; }
-.network-lines path:nth-child(3n) { stroke: #e7ecea; }
+.network-lines path { fill: none; stroke: #cfdad6; stroke-width: .85; }
+.network-lines path:nth-child(3n) { stroke: #dfe7e3; }
 .network-lines, .network-mesh, .network-flows, .network-nodes { transform-box: fill-box; transform-origin: 50% 50%; will-change: transform; }
 .network-lines { animation: topology-drift 24s ease-in-out infinite alternate; }
-.network-mesh { opacity: .68; animation: mesh-breathe 32s ease-in-out infinite alternate-reverse; }
-.network-mesh path { fill: none; stroke: #e2e9e6; stroke-width: .72; }
-.network-flows { opacity: .72; }
-.network-flows .flow { fill: none; stroke: #9dbeb2; stroke-width: 1.05; stroke-linecap: round; stroke-dasharray: 92 1420; animation: flow-line 16s linear infinite; }
+.network-mesh { opacity: .82; animation: mesh-breathe 32s ease-in-out infinite alternate-reverse; }
+.network-mesh path { fill: none; stroke: #d5dfdb; stroke-width: .72; }
+.network-flows { opacity: .87; }
+.network-flows .flow { fill: none; stroke: #82ae9f; stroke-width: 1.1; stroke-linecap: round; stroke-dasharray: 110 1250; animation: flow-line 16s linear infinite; }
 .network-flows .flow-two { animation-duration: 20s; animation-delay: -7s; stroke: #b0c8bf; }
 .network-flows .flow-three { animation-duration: 18s; animation-delay: -12s; stroke: #89b2a3; }
 .network-flows .flow-four { animation-duration: 24s; animation-delay: -4s; stroke: #b7cdc5; }
 .network-flows .flow-five { animation-duration: 21s; animation-delay: -14s; stroke: #a3c2b7; }
 .network-flows .flow-six { animation-duration: 27s; animation-delay: -19s; stroke: #b7cdc5; }
-.network-nodes circle { fill: #aab4b0; opacity: .78; }
+.network-nodes circle { fill: #8f9e98; opacity: .78; }
 .network-nodes circle:nth-child(3n) { animation: node-breathe 6s ease-in-out infinite; }
 .network-nodes circle:nth-child(4n) { animation: node-breathe 8s ease-in-out -3s infinite reverse; }
 .network-nodes circle:nth-child(5n) { animation: node-breathe 10s ease-in-out -6s infinite; }
