@@ -1,6 +1,9 @@
 services:
   postgres:
     image: ghcr.io/jonathanmcohen/pgvector:16-0.8.3
+    volumes:
+      - pgdata:/var/lib/postgresql/data:Z
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro,Z
 
   api:
     build:
