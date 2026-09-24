@@ -7,6 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import Task
 
 
+def utc_now_naive() -> datetime:
+    """Return UTC for legacy PostgreSQL timestamp-without-time-zone columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 async def enqueue_task(
     db: AsyncSession,
     *,
@@ -29,7 +34,7 @@ async def enqueue_task(
 
 
 async def claim_task(db: AsyncSession, worker_id: str) -> Task | None:
-    now = datetime.now(timezone.utc)
+    now = utc_now_naive()
     stmt = (
         select(Task)
         .where(
@@ -61,7 +66,7 @@ async def complete_task(db: AsyncSession, task_id: UUID, result: dict) -> None:
     task.result = result
     task.locked_by = None
     task.locked_at = None
-    task.finished_at = datetime.now(timezone.utc)
+    task.finished_at = utc_now_naive()
     await db.commit()
 
 
@@ -74,8 +79,8 @@ async def fail_task(db: AsyncSession, task_id: UUID, error: str) -> None:
     task.locked_at = None
     if task.attempts >= task.max_attempts:
         task.status = "failed"
-        task.finished_at = datetime.now(timezone.utc)
+        task.finished_at = utc_now_naive()
     else:
         task.status = "retrying"
-        task.available_at = datetime.now(timezone.utc) + timedelta(seconds=min(60, 2**task.attempts))
+        task.available_at = utc_now_naive() + timedelta(seconds=min(60, 2**task.attempts))
     await db.commit()
