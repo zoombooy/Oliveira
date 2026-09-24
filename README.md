@@ -433,6 +433,18 @@ docker compose ps
 curl http://localhost:8000/healthz
 ```
 
+服务器使用 Nginx 静态前端覆盖配置时，先生成 `frontend/dist`，再执行构建；`dist` 是构建产物，不提交到 Git：
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+docker compose -f docker-compose.yml -f docker-compose.server.yml build api worker frontend
+docker compose -f docker-compose.yml -f docker-compose.server.yml run --rm api alembic upgrade head
+docker compose -f docker-compose.yml -f docker-compose.server.yml up -d api worker frontend
+```
+
 正式验收至少应覆盖：
 
 - 注册用户 → 创建工作空间 → 创建项目；
