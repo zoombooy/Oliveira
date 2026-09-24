@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +9,7 @@ from app.api.deps import get_current_user, require_project_access
 from app.core.database import get_session
 from app.models.tables import AuditLog, Fact, FactVersion, ReviewItem, Task, User
 from app.schemas.facts import ExtractFactsIn, FactOut, ResolveReviewIn, ReviewItemOut
-from app.services.tasks import enqueue_task
+from app.services.tasks import enqueue_task, utc_now_naive
 
 router = APIRouter(prefix="/api/v1", tags=["facts"])
 
@@ -127,7 +127,7 @@ async def _resolve_review(
     review.status = "resolved" if approved else "ignored"
     review.resolution = body.resolution
     review.resolved_by = f"user:{user.id}"
-    review.resolved_at = datetime.now(timezone.utc)
+    review.resolved_at = utc_now_naive()
     if review.item_type == "fact_pending":
         fact = await db.get(Fact, review.ref_id)
         if fact is not None:
@@ -183,7 +183,7 @@ async def resolve_review(
     review.status = "resolved"
     review.resolution = body.resolution
     review.resolved_by = f"user:{user.id}"
-    review.resolved_at = datetime.now(timezone.utc)
+    review.resolved_at = utc_now_naive()
     await db.commit()
     await db.refresh(review)
     return review

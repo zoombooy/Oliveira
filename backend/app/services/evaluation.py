@@ -4,7 +4,6 @@
 混进检索指标。每次运行保留用例级结果，便于比较切块、模型和权重变化。
 """
 
-from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import EvaluationCase, EvaluationResult, EvaluationRun, Task
 from app.services.llm import get_llm_for_project
 from app.services.retrieval import search
+from app.services.tasks import utc_now_naive
 
 
 def first_relevant_rank(
@@ -57,7 +57,7 @@ async def execute_retrieval_evaluation(db: AsyncSession, task: Task) -> dict:
     cases = list((await db.execute(stmt.order_by(EvaluationCase.created_at))).scalars())
 
     run.status = "running"
-    run.started_at = datetime.now(timezone.utc)
+    run.started_at = utc_now_naive()
     run.total_cases = len(cases)
     await db.commit()
 
@@ -117,6 +117,6 @@ async def execute_retrieval_evaluation(db: AsyncSession, task: Task) -> dict:
     metrics["successful_cases"] = len(cases) - error_count
     run.metrics = metrics
     run.status = "completed" if not error_count else "completed_with_errors"
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = utc_now_naive()
     await db.commit()
     return metrics

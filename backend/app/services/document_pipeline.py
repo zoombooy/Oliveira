@@ -1,6 +1,5 @@
 """文档解析与 Embedding 的可恢复 Worker 管道。"""
 
-from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -12,7 +11,7 @@ from app.services.ingest import UnsupportedFileType, chunk_paragraphs, parse_fil
 from app.services.llm import get_llm_for_project
 from app.services.object_storage import LocalObjectStorage
 from app.services.run_events import append_run_event
-from app.services.tasks import enqueue_task
+from app.services.tasks import enqueue_task, utc_now_naive
 
 
 class DocumentPipelineError(RuntimeError):
@@ -44,7 +43,7 @@ async def _fail_run(db: AsyncSession, run: Run | None, event: str, error: str) -
         return
     run.status = "failed"
     run.error = error[:4000]
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = utc_now_naive()
     await append_run_event(db, run.id, event, {"error": run.error})
 
 
@@ -151,7 +150,7 @@ async def execute_document_embed(db: AsyncSession, task: Task) -> dict:
         if run is not None:
             run.status = "completed"
             run.output = {"version_id": str(version.id), "chunks": 0, "index_status": "unavailable"}
-            run.finished_at = datetime.now(timezone.utc)
+            run.finished_at = utc_now_naive()
             await append_run_event(db, run.id, "completed", run.output)
         await db.commit()
         return {"version_id": str(version.id), "chunks": 0, "index_status": "unavailable"}
@@ -170,7 +169,7 @@ async def execute_document_embed(db: AsyncSession, task: Task) -> dict:
             if run is not None:
                 run.status = "completed"
                 run.output = output
-                run.finished_at = datetime.now(timezone.utc)
+                run.finished_at = utc_now_naive()
                 await append_run_event(db, run.id, "completed", output)
             await db.commit()
             return output
@@ -209,7 +208,7 @@ async def execute_document_embed(db: AsyncSession, task: Task) -> dict:
     if run is not None:
         run.status = "completed"
         run.output = output
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = utc_now_naive()
         await append_run_event(db, run.id, "completed", output)
     await db.commit()
     return output

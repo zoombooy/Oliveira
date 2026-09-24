@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +8,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_session
 from app.models.tables import User, UserMemory
 from app.schemas.memories import MemoryCreate, MemoryOut, MemoryPatch
+from app.services.tasks import utc_now_naive
 
 router = APIRouter(prefix="/api/v1/users/me/memories", tags=["memories"])
 
@@ -62,7 +62,7 @@ async def patch_memory(
         memory.value = body.value.strip()
     if body.status is not None:
         memory.status = body.status
-        memory.retracted_at = datetime.now(timezone.utc) if body.status == "retracted" else None
+        memory.retracted_at = utc_now_naive() if body.status == "retracted" else None
     await db.commit()
     await db.refresh(memory)
     return memory
@@ -78,7 +78,7 @@ async def retract_memory(
     if memory is None or memory.user_id != user.id:
         raise HTTPException(status_code=404, detail="记忆不存在")
     memory.status = "retracted"
-    memory.retracted_at = datetime.now(timezone.utc)
+    memory.retracted_at = utc_now_naive()
     await db.commit()
     await db.refresh(memory)
     return memory

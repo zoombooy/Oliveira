@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +8,7 @@ from app.api.deps import get_current_user, require_project_access, require_works
 from app.core.database import get_session
 from app.models.tables import Run, RunEvent, User
 from app.schemas.runs import RunEventOut, RunOut
-from app.services.tasks import enqueue_task
+from app.services.tasks import enqueue_task, utc_now_naive
 
 router = APIRouter(prefix="/api/v1", tags=["runs"])
 
@@ -82,7 +81,7 @@ async def cancel_run(
     if run.status in {"completed", "failed", "cancelled"}:
         return run
     run.status = "cancelled"
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = utc_now_naive()
     next_seq = (
         await db.execute(select(func.coalesce(func.max(RunEvent.seq), 0) + 1).where(RunEvent.run_id == run.id))
     ).scalar_one()

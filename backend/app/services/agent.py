@@ -7,7 +7,6 @@
 import time
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -18,6 +17,7 @@ from app.models.tables import Conversation, Message, Run
 from app.services.agent_tools import ToolContext, build_default_registry
 from app.services.llm import LLMNotConfigured, get_llm_for_scope
 from app.services.run_events import append_run_event
+from app.services.tasks import utc_now_naive
 
 
 @dataclass
@@ -152,7 +152,7 @@ async def execute_agent_run(db: AsyncSession, run_id: UUID) -> dict:
     if run.conversation_id is None:
         raise ValueError("Agent Run 缺少 conversation_id")
     run.status = "running"
-    run.started_at = run.started_at or datetime.now(timezone.utc)
+    run.started_at = run.started_at or utc_now_naive()
     await append_run_event(db, run.id, "started", {"max_steps": get_settings().max_agent_steps})
     await db.commit()
     try:
@@ -171,7 +171,7 @@ async def execute_agent_run(db: AsyncSession, run_id: UUID) -> dict:
         db.add(assistant)
         run.status = "completed"
         run.output = {"citations": result.citations, "steps": result.steps}
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = utc_now_naive()
         conversation = await db.get(Conversation, run.conversation_id)
         if conversation is not None:
             conversation.updated_at = run.finished_at
@@ -181,14 +181,14 @@ async def execute_agent_run(db: AsyncSession, run_id: UUID) -> dict:
     except LLMNotConfigured:
         run.status = "failed"
         run.error = "Provider 未配置或不可用"
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = utc_now_naive()
         await append_run_event(db, run.id, "failed", {"code": "provider_not_configured"})
         await db.commit()
         raise
     except Exception as exc:
         run.status = "failed"
         run.error = str(exc)[:4000]
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = utc_now_naive()
         await append_run_event(db, run.id, "failed", {"error": run.error})
         await db.commit()
         raise

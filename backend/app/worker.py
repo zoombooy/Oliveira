@@ -48,10 +48,12 @@ async def run() -> None:
                         result = await handle_task(task, db)
                         await complete_task(db, task.id, result)
                     except Exception as exc:
-                        logger.exception("task %s failed", task.id)
+                        task_id = task.id
+                        await db.rollback()
+                        logger.exception("task %s failed", task_id)
                         await fail_task(
                             db,
-                            task.id,
+                            task_id,
                             str(exc),
                             retryable=getattr(exc, "retryable", True),
                         )
