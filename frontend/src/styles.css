@@ -190,4 +190,16 @@ button:disabled { cursor: not-allowed; }
   .topbar { min-height: 82px; padding: 17px 20px; }.topbar-actions { gap: 8px; }.sync-status { display: none; }.quiet-action { min-width: 36px; padding: 0 9px; }.quiet-action span { display: none; }.content { padding: 32px 20px 60px; }.section-heading { align-items: flex-start; flex-direction: column; gap: 18px; }.section-heading h1 { font-size: 31px; }.metric-row { gap: 8px; }.metric-row div { padding: 14px 12px; }.metric-row strong { font-size: 21px; }.row-date { display: none; }.review-layout, .settings-grid { grid-template-columns: 1fr; }.citation-drawer { position: fixed; z-index: 10; inset: 0 0 0 auto; max-width: min(340px, 92vw); }.memory-create { flex-direction: column; }.memory-create button { align-self: flex-start; }.search-bar button { padding-left: 13px; padding-right: 13px; }
 }
 
+@media (max-height: 800px) and (min-width: 761px) {
+  .auth-center { justify-content: flex-start; padding-top: 28px; padding-bottom: 42px; }
+  .auth-tagline { margin-top: 15px; margin-bottom: 8px; }
+  .auth-heading h1 { font-size: 48px; }
+  .auth-heading > p:last-child { margin-top: 9px; }
+  .auth-card { margin-top: 20px; padding: 18px 24px 17px; }
+  .auth-form { gap: 11px; margin-top: 16px; }
+  .auth-form input { min-height: 40px; }
+  .auth-submit { min-height: 40px; }
+  .auth-footnote { margin-top: 12px; }
+}
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
