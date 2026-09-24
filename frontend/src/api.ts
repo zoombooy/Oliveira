@@ -1,9 +1,9 @@
 export type User = { id: string; username: string; display_name: string }
 export type Workspace = { id: string; name: string; owner_id: string; created_at: string }
 export type Project = { id: string; workspace_id: string; name: string; description: string; provider_id?: string | null }
-export type Conversation = { id: string; project_id: string; title: string; created_at: string }
+export type Conversation = { id: string; workspace_id: string; project_id?: string | null; title: string; created_at: string }
 export type Message = { id: string; role: string; content: string; run_id?: string | null; created_at: string }
-export type Run = { id: string; project_id: string; conversation_id?: string | null; kind: string; status: string; input: Record<string, unknown>; output: Record<string, unknown>; error?: string | null; created_at: string }
+export type Run = { id: string; workspace_id: string; project_id?: string | null; conversation_id?: string | null; kind: string; status: string; input: Record<string, unknown>; output: Record<string, unknown>; error?: string | null; created_at: string }
 export type Document = { id: string; title: string; version_no: number; parse_status: string; index_status: string; chunk_count: number; embedded: boolean; created_at: string }
 export type SearchResult = { chunk_id: string; document_id: string; document_version_id: string; document_title: string; page_number?: number | null; paragraph_index?: number | null; snippet: string; vector_score?: number | null; keyword_score?: number | null; final_score: number; methods: string[] }
 export type Fact = { id: string; project_id: string; subject_text: string; predicate: string; object_text: string; status: string; confidence?: number | null; valid_from?: string | null; valid_to?: string | null; recorded_at?: string | null; evidence_ref_id?: string | null; created_at: string }
