@@ -11,6 +11,7 @@ dist/
 # Node（M1 起前端目录使用）
 node_modules/
 *.tsbuildinfo
+wheelhouse/
 
 # 环境与密钥
 .env

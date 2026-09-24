@@ -4,15 +4,20 @@ services:
 
   api:
     build:
+      dockerfile: Dockerfile.offline
       args:
         PYTHON_IMAGE: python:3.12-slim
 
   worker:
     build:
+      dockerfile: Dockerfile.offline
       args:
         PYTHON_IMAGE: python:3.12-slim
 
   frontend:
     build:
+      dockerfile: Dockerfile.static
       args:
         NODE_IMAGE: node:22-bookworm
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
