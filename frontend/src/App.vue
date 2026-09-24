@@ -174,51 +174,96 @@ onMounted(boot)
 
 <template>
   <div v-if="!loggedIn" class="auth-scene">
-    <div class="auth-glow auth-glow-one" />
-    <div class="auth-glow auth-glow-two" />
-    <div class="auth-layout">
-      <section class="auth-intro">
-        <div class="brand-mark"><span class="brand-dot" /> Oliveira</div>
-        <p class="eyebrow">EVIDENCE-FIRST KNOWLEDGE WORKBENCH</p>
-        <h1>让知识保留<br /><em>来龙去脉。</em></h1>
-        <p class="auth-copy">文档、事实和决策在同一个可追溯空间里沉淀。每一次回答，都能回到它的来源与时间。</p>
-        <div class="auth-signal"><span class="signal-line" /><span>双时态 · 可核查 · 可回放</span></div>
-      </section>
-      <section class="auth-card" aria-label="登录 Oliveira">
-        <div class="auth-card-heading"><span>{{ authMode === 'login' ? '欢迎回来' : '建立你的空间' }}</span><span class="auth-index">01 / 02</span></div>
-        <div class="auth-tabs"><button :class="{ active: authMode === 'login' }" @click="authMode = 'login'">登录</button><button :class="{ active: authMode === 'register' }" @click="authMode = 'register'">注册</button></div>
-        <form class="auth-form" @submit.prevent="submitAuth">
-          <label>邮箱或用户名<input v-model="username" autocomplete="username" placeholder="you@example.com" required /></label>
-          <label v-if="authMode === 'register'">显示名称<input v-model="displayName" placeholder="你的名字" required /></label>
-          <label>密码<input v-model="password" type="password" autocomplete="current-password" placeholder="至少 8 位字符" minlength="8" required /></label>
-          <p v-if="authError" class="form-error">{{ authError }}</p>
-          <button class="primary-button" type="submit" :disabled="authBusy">{{ authBusy ? '正在进入…' : authMode === 'login' ? '进入工作台' : '创建工作空间' }}<span>↗</span></button>
-        </form>
-        <p class="auth-footnote"><Lock :size="13" /> 你的资料只属于你的工作空间</p>
-      </section>
+    <div class="auth-network" aria-hidden="true">
+      <svg viewBox="0 0 1600 900" preserveAspectRatio="none">
+        <g class="network-lines">
+          <path d="M-40 140 C210 42 370 206 590 118 S1010 35 1660 166" />
+          <path d="M-80 390 C190 250 410 470 710 350 S1190 250 1680 388" />
+          <path d="M-50 700 C230 590 400 790 680 630 S1170 540 1650 700" />
+          <path d="M160 940 C390 700 520 760 740 920 S1150 1010 1410 730" />
+          <path d="M170 -40 C120 180 370 250 270 520 S220 780 370 940" />
+          <path d="M610 -40 C520 180 790 240 650 480 S610 760 790 940" />
+          <path d="M1010 -40 C900 180 1120 320 990 520 S1090 760 1190 940" />
+          <path d="M1390 -40 C1250 150 1510 310 1350 510 S1410 750 1570 940" />
+          <path d="M-80 235 C240 390 420 130 730 240 S1150 460 1670 240" />
+          <path d="M-80 560 C260 420 480 650 720 510 S1160 380 1670 570" />
+        </g>
+        <g class="network-nodes">
+          <circle cx="142" cy="141" r="3" /><circle cx="270" cy="520" r="3" /><circle cx="370" cy="206" r="3" />
+          <circle cx="520" cy="238" r="3" /><circle cx="590" cy="118" r="3" /><circle cx="650" cy="480" r="3" />
+          <circle cx="710" cy="350" r="3" /><circle cx="790" cy="240" r="3" /><circle cx="990" cy="520" r="3" />
+          <circle cx="1010" cy="165" r="3" /><circle cx="1120" cy="320" r="3" /><circle cx="1190" cy="700" r="3" />
+          <circle cx="1350" cy="510" r="3" /><circle cx="1410" cy="730" r="3" /><circle cx="1510" cy="310" r="3" />
+          <circle cx="235" cy="390" r="3" /><circle cx="480" cy="650" r="3" /><circle cx="730" cy="240" r="3" />
+        </g>
+      </svg>
     </div>
+    <div class="auth-ambient auth-ambient-left" />
+    <div class="auth-ambient auth-ambient-right" />
+    <main class="auth-center">
+      <div class="auth-heading">
+        <div class="auth-brand"><span class="brand-dot" /> Oliveira</div>
+        <p class="auth-tagline">让知识有迹可循 · 让答案有据可依</p>
+        <h1>让知识保留<br /><em>来龙去脉。</em></h1>
+        <p>可追溯知识库与智能检索平台</p>
+      </div>
+      <section class="auth-card" aria-label="登录 Oliveira">
+        <div class="auth-tabs" role="tablist" aria-label="账户操作">
+          <button type="button" role="tab" :aria-selected="authMode === 'login'" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">登录</button>
+          <button type="button" role="tab" :aria-selected="authMode === 'register'" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">注册</button>
+        </div>
+        <form class="auth-form" @submit.prevent="submitAuth">
+          <label>邮箱或用户名<input v-model="username" autocomplete="username" placeholder="邮箱或用户名" required /></label>
+          <label v-if="authMode === 'register'">显示名称<input v-model="displayName" autocomplete="name" placeholder="你的名字" required /></label>
+          <label>密码<input v-model="password" type="password" autocomplete="current-password" placeholder="至少 8 位字符" minlength="8" required /></label>
+          <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
+          <button class="primary-button auth-submit" type="submit" :disabled="authBusy">{{ authBusy ? '正在进入…' : authMode === 'login' ? '登录' : '创建空间' }}<span>↗</span></button>
+        </form>
+        <p class="auth-footnote"><Lock :size="14" /> 你的资料只属于你的工作空间</p>
+      </section>
+      <p class="auth-consent">继续即表示你同意使用条款，并已知悉隐私政策。</p>
+    </main>
     <div class="auth-footer"><span>OLIVEIRA / 2026</span><span>TRACEABLE INTELLIGENCE</span></div>
   </div>
 
   <div v-else class="app-shell" :class="{ 'is-collapsed': collapsed }">
     <aside class="sidebar">
-      <div class="sidebar-top"><div class="brand-mark compact"><span class="brand-dot" /><span v-if="!collapsed">Oliveira</span></div><button class="icon-button subtle" aria-label="折叠侧栏" @click="collapsed = !collapsed"><Fold v-if="!collapsed" :size="18" /><FullScreen v-else :size="18" /></button></div>
-      <div class="workspace-picker" :title="currentWorkspace?.name"><Grid :size="16" /><select v-model="workspaceId"><option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">{{ workspace.name }}</option></select></div>
-      <div class="project-picker"><span>项目</span><select v-model="projectId"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><button class="tiny-button" aria-label="新建项目" @click="panel = 'settings'"><Plus :size="15" /></button></div>
+      <div class="sidebar-top">
+        <div class="brand-mark compact"><span class="brand-dot" /><span v-if="!collapsed">Oliveira</span></div>
+        <button class="icon-button sidebar-toggle" aria-label="折叠侧栏" @click="collapsed = !collapsed"><Fold v-if="!collapsed" :size="17" /><FullScreen v-else :size="17" /></button>
+      </div>
+      <div class="workspace-picker" :title="currentWorkspace?.name">
+        <div class="picker-label"><Grid :size="14" /><span v-if="!collapsed">工作空间</span></div>
+        <div v-if="!collapsed" class="select-shell"><select v-model="workspaceId" aria-label="选择工作空间"><option v-for="workspace in workspaces" :key="workspace.id" :value="workspace.id">{{ workspace.name }}</option></select><span>⌄</span></div>
+      </div>
+      <div v-if="!collapsed" class="project-picker">
+        <div class="project-picker-heading"><span>当前项目</span><button class="tiny-button" aria-label="新建项目" title="新建项目" @click="panel = 'settings'"><Plus :size="15" /></button></div>
+        <div class="select-shell project-select"><select v-model="projectId" aria-label="选择项目"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span>⌄</span></div>
+      </div>
       <nav class="primary-nav" aria-label="主导航">
-        <button :class="{ active: panel === 'chat' }" @click="panel = 'chat'"><ChatDotRound :size="18" /><span v-if="!collapsed">对话</span></button>
-        <button :class="{ active: panel === 'documents' }" @click="panel = 'documents'"><Collection :size="18" /><span v-if="!collapsed">知识库</span><b v-if="!collapsed">{{ documents.length }}</b></button>
-        <button :class="{ active: panel === 'search' }" @click="panel = 'search'"><Search :size="18" /><span v-if="!collapsed">检索</span></button>
-        <button :class="{ active: panel === 'facts' }" @click="panel = 'facts'"><Tickets :size="18" /><span v-if="!collapsed">事实审核</span><b v-if="!collapsed && reviewItems.length">{{ reviewItems.length }}</b></button>
-        <button :class="{ active: panel === 'timeline' }" @click="panel = 'timeline'"><Operation :size="18" /><span v-if="!collapsed">时间线</span></button>
+        <div v-if="!collapsed" class="nav-section-title">工作台</div>
+        <button :title="collapsed ? '对话' : undefined" :class="{ active: panel === 'chat' }" @click="panel = 'chat'"><span class="nav-icon"><ChatDotRound :size="17" /></span><span v-if="!collapsed">对话</span><b v-if="!collapsed && conversations.length">{{ conversations.length }}</b></button>
+        <button :title="collapsed ? '知识库' : undefined" :class="{ active: panel === 'documents' }" @click="panel = 'documents'"><span class="nav-icon"><Collection :size="17" /></span><span v-if="!collapsed">知识库</span><b v-if="!collapsed">{{ documents.length }}</b></button>
+        <button :title="collapsed ? '检索' : undefined" :class="{ active: panel === 'search' }" @click="panel = 'search'"><span class="nav-icon"><Search :size="17" /></span><span v-if="!collapsed">检索</span></button>
+        <div v-if="!collapsed" class="nav-section-title secondary">知识治理</div>
+        <button :title="collapsed ? '事实审核' : undefined" :class="{ active: panel === 'facts' }" @click="panel = 'facts'"><span class="nav-icon"><Tickets :size="17" /></span><span v-if="!collapsed">事实审核</span><b v-if="!collapsed && reviewItems.length" class="warning-count">{{ reviewItems.length }}</b></button>
+        <button :title="collapsed ? '时间线' : undefined" :class="{ active: panel === 'timeline' }" @click="panel = 'timeline'"><span class="nav-icon"><Operation :size="17" /></span><span v-if="!collapsed">时间线</span></button>
+        <button :title="collapsed ? '运行记录' : undefined" :class="{ active: panel === 'runs' }" @click="panel = 'runs'"><span class="nav-icon"><HomeFilled :size="17" /></span><span v-if="!collapsed">运行记录</span></button>
       </nav>
-      <div v-if="!collapsed" class="sidebar-section-label">最近对话 <button class="tiny-button" aria-label="新对话" @click="createConversation"><Plus :size="15" /></button></div>
-      <div v-if="!collapsed" class="conversation-list"><button v-for="conversation in conversations.slice(0, 8)" :key="conversation.id" :class="{ active: conversation.id === conversationId }" @click="selectConversation(conversation.id)"><Message :size="15" /><span>{{ conversation.title }}</span></button><div v-if="!conversations.length" class="empty-side">还没有对话</div></div>
-      <div class="sidebar-bottom"><button :class="{ active: panel === 'runs' }" @click="panel = 'runs'"><HomeFilled :size="18" /><span v-if="!collapsed">运行记录</span></button><button :class="{ active: panel === 'memories' }" @click="panel = 'memories'"><UserFilled :size="18" /><span v-if="!collapsed">我的记忆</span></button><button :class="{ active: panel === 'settings' }" @click="panel = 'settings'"><Setting :size="18" /><span v-if="!collapsed">设置</span></button><div class="user-chip" v-if="!collapsed"><span>{{ (user?.display_name || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.display_name }}</strong><small>{{ user?.username }}</small></div><button aria-label="退出登录" @click="logout">↗</button></div></div>
+      <div v-if="!collapsed" class="recent-heading"><span>最近对话</span><button class="tiny-button" aria-label="新对话" title="新对话" @click="createConversation"><Plus :size="15" /></button></div>
+      <div v-if="!collapsed" class="conversation-list"><button v-for="conversation in conversations.slice(0, 6)" :key="conversation.id" :class="{ active: conversation.id === conversationId }" @click="selectConversation(conversation.id)"><Message :size="14" /><span>{{ conversation.title }}</span></button><div v-if="!conversations.length" class="empty-side">还没有对话</div></div>
+      <div class="sidebar-bottom">
+        <button :title="collapsed ? '我的记忆' : undefined" :class="{ active: panel === 'memories' }" @click="panel = 'memories'"><span class="nav-icon"><UserFilled :size="17" /></span><span v-if="!collapsed">我的记忆</span></button>
+        <button :title="collapsed ? '设置' : undefined" :class="{ active: panel === 'settings' }" @click="panel = 'settings'"><span class="nav-icon"><Setting :size="17" /></span><span v-if="!collapsed">设置</span></button>
+        <div class="user-chip" v-if="!collapsed"><span class="user-avatar">{{ (user?.display_name || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.display_name || 'Oliveira 用户' }}</strong><small>{{ user?.username }}</small></div><button aria-label="退出登录" title="退出登录" @click="logout">↗</button></div>
+      </div>
     </aside>
 
     <main class="main-stage">
-      <header class="topbar"><div><p class="stage-kicker">{{ currentProject?.name || '未选择项目' }} <span>/</span> WORKSPACE</p><h2>{{ panelTitle }}</h2></div><div class="topbar-actions"><span class="sync-status"><i /> 数据源已同步</span><button class="icon-button" aria-label="新建对话" @click="createConversation"><Plus :size="18" /></button></div></header>
+      <header class="topbar">
+        <div class="topbar-heading"><div class="breadcrumbs"><span>{{ currentWorkspace?.name || '工作空间' }}</span><i>/</i><strong>{{ currentProject?.name || '未选择项目' }}</strong></div><div class="topbar-title-row"><h2>{{ panelTitle }}</h2><span v-if="currentProject" class="context-chip">项目空间</span></div></div>
+        <div class="topbar-actions"><span class="sync-status"><i /> 数据源已同步</span><button class="quiet-action" aria-label="新建对话" @click="createConversation"><Plus :size="16" /><span>新对话</span></button></div>
+      </header>
       <div v-if="error" class="error-banner">{{ error }}<button @click="error = ''">×</button></div>
       <section v-if="panel === 'chat'" class="content chat-content">
         <div v-if="!currentConversation" class="welcome-card"><span class="welcome-orbit"><span /></span><p class="eyebrow">YOUR KNOWLEDGE, IN CONTEXT</p><h1>从一个问题开始。</h1><p>上传资料，Oliveira 会在保留来源和时间的前提下，帮你整理、检索与回答。</p><button class="primary-button small" @click="panel = 'documents'">先添加知识 <span>↗</span></button></div>
