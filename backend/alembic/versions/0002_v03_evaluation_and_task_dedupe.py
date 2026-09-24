@@ -8,7 +8,7 @@ alembic upgrade head after either a fresh bootstrap or an older database.
 from alembic import op
 
 
-revision = "0002_v03_evaluation_and_task_dedupe"
+revision = "0002_v03_eval_task_dedupe"
 down_revision = "0001_bootstrap_baseline"
 branch_labels = None
 depends_on = None
