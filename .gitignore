@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Node（M1 起前端目录使用）
+node_modules/
+
+# 环境与密钥
+.env
+.env.local
+
+# 本地数据（上传文件、对象存储占位）
+backend/data/
+
+# 数据库卷与临时文件
+pgdata/
+*.log
+.DS_Store
