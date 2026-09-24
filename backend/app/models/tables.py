@@ -338,6 +338,7 @@ class Task(Base):
     workspace_id: Mapped[UUID] = mapped_column(ForeignKey("workspaces.id"))
     project_id: Mapped[UUID | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     kind: Mapped[str] = mapped_column(String)
+    dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String, default="queued", index=True)
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
     result: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -350,6 +351,50 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class EvaluationCase(Base):
+    __tablename__ = "evaluation_cases"
+
+    id: Mapped[UUID] = uuid_column()
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    question: Mapped[str] = mapped_column(Text)
+    expected_chunk_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    expected_document_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    reference_answer: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+
+    id: Mapped[UUID] = uuid_column()
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String, default="queued", index=True)
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    total_cases: Mapped[int] = mapped_column(Integer, default=0)
+    completed_cases: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class EvaluationResult(Base):
+    __tablename__ = "evaluation_results"
+
+    id: Mapped[UUID] = uuid_column()
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_runs.id", ondelete="CASCADE"))
+    case_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_cases.id", ondelete="CASCADE"))
+    retrieved_chunk_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    first_hit_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hit_at_k: Mapped[bool] = mapped_column(Boolean, default=False)
+    reciprocal_rank: Mapped[float] = mapped_column(default=0.0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class AuditLog(Base):

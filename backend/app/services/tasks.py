@@ -20,11 +20,28 @@ async def enqueue_task(
     kind: str,
     payload: dict,
     max_attempts: int = 3,
+    dedupe_key: str | None = None,
 ) -> Task:
+    if dedupe_key:
+        existing = (
+            await db.execute(select(Task).where(Task.dedupe_key == dedupe_key))
+        ).scalar_one_or_none()
+        if existing is not None:
+            if existing.status in {"failed", "cancelled"}:
+                existing.status = "queued"
+                existing.result = {}
+                existing.last_error = None
+                existing.attempts = 0
+                existing.available_at = utc_now_naive()
+                existing.finished_at = None
+                existing.locked_by = None
+                existing.locked_at = None
+            return existing
     task = Task(
         workspace_id=workspace_id,
         project_id=project_id,
         kind=kind,
+        dedupe_key=dedupe_key,
         payload=payload,
         max_attempts=max_attempts,
     )
@@ -70,14 +87,20 @@ async def complete_task(db: AsyncSession, task_id: UUID, result: dict) -> None:
     await db.commit()
 
 
-async def fail_task(db: AsyncSession, task_id: UUID, error: str) -> None:
+async def fail_task(
+    db: AsyncSession,
+    task_id: UUID,
+    error: str,
+    *,
+    retryable: bool = True,
+) -> None:
     task = await db.get(Task, task_id)
     if task is None:
         return
     task.last_error = error[:4000]
     task.locked_by = None
     task.locked_at = None
-    if task.attempts >= task.max_attempts:
+    if not retryable or task.attempts >= task.max_attempts:
         task.status = "failed"
         task.finished_at = utc_now_naive()
     else:

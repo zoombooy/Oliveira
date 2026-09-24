@@ -5,6 +5,7 @@ from app.services.ingest import (
     UnsupportedFileType,
     chunk_paragraphs,
     parse_file,
+    sha256_bytes,
     sha256_text,
 )
 
@@ -12,6 +13,11 @@ from app.services.ingest import (
 def test_sha256_stable():
     assert sha256_text("abc") == sha256_text("abc")
     assert sha256_text("abc") != sha256_text("abd")
+
+
+def test_sha256_bytes_is_stable_for_binary_files():
+    assert sha256_bytes(b"abc") == sha256_bytes(b"abc")
+    assert sha256_bytes(b"abc") != sha256_bytes(b"abd")
 
 
 def test_parse_txt():

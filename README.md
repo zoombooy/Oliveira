@@ -144,9 +144,24 @@ Agent 通过 PostgreSQL 任务队列异步执行，运行过程写入 Run 和 Ru
 | 会话摘要 | 已实现基础版本 | 摘要任务和原始消息保留；按预算触发的完整策略列入 v0.3 |
 | 结构化用户记忆 | 已实现 | 用户主动保存，删除采用撤回 |
 | Web 工作台 | 已实现基础版本 | 核心页面已具备，仍需继续完善加载、空状态、移动端和运行详情 |
-| 检索评估数据集 | 未实现 | 下一版本建立至少 30 条 QA 评估集和持久化指标 |
-| 生产级异步文档管道 | 部分实现 | 上传入口已完成同步解析；`document_ingest/document_embed` Worker 处理器仍需替换为真实后台管道 |
+| 检索评估数据集 | 已实现基础版 | 已有评估用例、异步评估 Run、用例级结果、Hit@K 和 MRR API；QA 数据集管理和 Web 页面列入后续迭代 |
+| 生产级异步文档管道 | 已实现基础版 | 上传后进入 `document_ingest → document_embed` Worker 管道，支持批处理、幂等键、重试和 `partial/failed/unavailable` 状态 |
 | 外部写入、Skills、MCP 市场、沙箱 | 明确未做 | 不属于 M0-M3 产品版范围 |
+
+### v0.3 当前进度
+
+本分支已经开始落地 v0.3 P0：
+
+- [x] 检索评估基础模型、异步评估任务、Hit@K/MRR 指标和结果 API；
+- [x] 任务 `dedupe_key`，避免评估和文档阶段任务重复入队；
+- [x] 文档上传后的真实 `document_ingest → document_embed` Worker 管道；
+- [x] 本地对象存储 adapter，领域层只保存相对 `object_key`；
+- [x] `search_chunks`、`query_facts`、`get_entity_timeline` 只读 Agent Tool Registry；
+- [x] 工具参数 schema 校验、工具名称校验和工具耗时 RunEvent；
+- [ ] 30 条以上真实 QA 数据集和评估基线；
+- [ ] 评估数据集和 Run 的 Web 管理页面；
+- [ ] 前端文档处理进度轮询与失败阶段展示；
+- [ ] 模型驱动的多步 ToolCall 循环和更完整的 Run 恢复测试。
 
 ## 架构概览
 

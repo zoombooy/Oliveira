@@ -4,8 +4,8 @@
 这样前端可以回放一次运行，也不会把模型输出当成事实源。
 """
 
-import re
 import time
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
@@ -14,9 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models.tables import Conversation, Fact, FactVersion, Message, Run
+from app.models.tables import Conversation, Message, Run
+from app.services.agent_tools import ToolContext, build_default_registry
 from app.services.llm import LLMNotConfigured, get_llm_for_project
-from app.services.retrieval import RetrievedChunk, search
 from app.services.run_events import append_run_event
 
 
@@ -25,47 +25,6 @@ class AgentResult:
     answer: str
     citations: list[dict]
     steps: int
-
-
-def _citation_payload(item: RetrievedChunk) -> dict:
-    return {
-        "chunk_id": item.chunk_id,
-        "document_id": item.document_id,
-        "document_version_id": item.document_version_id,
-        "document_title": item.document_title,
-        "page_number": item.page_number,
-        "paragraph_index": item.paragraph_index,
-        "snippet": item.snippet[:500],
-        "score": item.score,
-        "method": item.method,
-    }
-
-
-async def _query_facts(db: AsyncSession, project_id: UUID, query: str) -> list[dict]:
-    terms = [term for term in re.split(r"\s+", query.lower()) if len(term) >= 2][:6]
-    stmt = select(Fact, FactVersion).join(FactVersion, Fact.current_version_id == FactVersion.id).where(
-        Fact.project_id == project_id,
-        Fact.status.in_(["asserted", "derived"]),
-    )
-    rows = (await db.execute(stmt)).all()
-    results: list[dict] = []
-    for fact, version in rows:
-        text = f"{version.subject_text} {version.predicate} {version.object_text}".lower()
-        if terms and not any(term in text for term in terms):
-            continue
-        results.append(
-            {
-                "fact_id": str(fact.id),
-                "subject": version.subject_text,
-                "predicate": version.predicate,
-                "object": version.object_text,
-                "valid_from": version.valid_from.isoformat() if version.valid_from else None,
-                "valid_to": version.valid_to.isoformat() if version.valid_to else None,
-                "recorded_at": version.recorded_at.isoformat(),
-                "evidence_ref_id": str(version.evidence_ref_id) if version.evidence_ref_id else None,
-            }
-        )
-    return results[:20]
 
 
 async def run_bounded_agent(
@@ -78,6 +37,8 @@ async def run_bounded_agent(
     settings = get_settings()
     started = time.monotonic()
     llm = await get_llm_for_project(db, run.project_id)
+    registry = build_default_registry()
+    tool_context = ToolContext(db=db, project_id=run.project_id, run_id=run.id)
     messages = list(
         (
             await db.execute(
@@ -90,28 +51,39 @@ async def run_bounded_agent(
     )
     messages.reverse()
 
-    await append_run_event(db, run.id, "tool_call", {"tool": "search_chunks", "arguments": {"query": question}})
-    query_embedding = await llm.embed([question])
-    retrieved = await search(
-        db,
-        run.project_id,
-        question,
-        top_k=settings.retrieval_top_k,
-        query_embedding=query_embedding[0] if query_embedding else None,
-    )
-    citations = [_citation_payload(item) for item in retrieved]
+    search_args = {"query": question, "top_k": settings.retrieval_top_k}
+    await append_run_event(db, run.id, "tool_call", {"tool": "search_chunks", "arguments": search_args})
+    search_result = await registry.invoke("search_chunks", search_args, tool_context)
+    citations = search_result.evidence
     await append_run_event(
         db,
         run.id,
         "tool_result",
-        {"tool": "search_chunks", "count": len(citations), "evidence": citations},
+        {
+            "tool": "search_chunks",
+            "count": len(citations),
+            "evidence": citations,
+            "elapsed_ms": search_result.elapsed_ms,
+        },
     )
 
     if time.monotonic() - started > settings.max_agent_runtime_seconds:
         raise TimeoutError("Agent 超过最大运行时间")
-    await append_run_event(db, run.id, "tool_call", {"tool": "query_facts", "arguments": {"query": question}})
-    facts = await _query_facts(db, run.project_id, question)
-    await append_run_event(db, run.id, "tool_result", {"tool": "query_facts", "count": len(facts), "facts": facts})
+    facts_args = {"query": question, "limit": 20}
+    await append_run_event(db, run.id, "tool_call", {"tool": "query_facts", "arguments": facts_args})
+    facts_result = await registry.invoke("query_facts", facts_args, tool_context)
+    facts = facts_result.output["facts"]
+    await append_run_event(
+        db,
+        run.id,
+        "tool_result",
+        {
+            "tool": "query_facts",
+            "count": len(facts),
+            "facts": facts,
+            "elapsed_ms": facts_result.elapsed_ms,
+        },
+    )
 
     context = "\n\n".join(
         f"[{index}] {item['document_title']}"

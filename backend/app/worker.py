@@ -12,6 +12,8 @@ from app.core.database import SessionLocal, engine
 from app.services.agent import execute_agent_run
 from app.services.fact_extraction import execute_fact_extract
 from app.services.conversation_summary import execute_conversation_summary
+from app.services.document_pipeline import execute_document_embed, execute_document_ingest
+from app.services.evaluation import execute_retrieval_evaluation
 from app.services.tasks import claim_task, complete_task, fail_task
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -25,10 +27,12 @@ async def handle_task(task, db) -> dict:
         return await execute_fact_extract(db, task)
     if task.kind == "conversation_summarize":
         return await execute_conversation_summary(db, task)
-    if task.kind in {"document_ingest", "document_embed"}:
-        # 这些处理器在对应产品模块接入前仍然有正式的任务生命周期；
-        # 不把它们伪装成已完成，保留可查询的 accepted 结果供后续处理器接管。
-        return {"accepted": True, "kind": task.kind, "payload": task.payload}
+    if task.kind == "retrieval_evaluation":
+        return await execute_retrieval_evaluation(db, task)
+    if task.kind == "document_ingest":
+        return await execute_document_ingest(db, task)
+    if task.kind == "document_embed":
+        return await execute_document_embed(db, task)
     raise ValueError(f"未知任务类型: {task.kind}")
 
 
@@ -45,7 +49,12 @@ async def run() -> None:
                         await complete_task(db, task.id, result)
                     except Exception as exc:
                         logger.exception("task %s failed", task.id)
-                        await fail_task(db, task.id, str(exc))
+                        await fail_task(
+                            db,
+                            task.id,
+                            str(exc),
+                            retryable=getattr(exc, "retryable", True),
+                        )
             await asyncio.sleep(settings.task_poll_interval)
     finally:
         await engine.dispose()
